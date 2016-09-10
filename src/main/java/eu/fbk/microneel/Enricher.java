@@ -16,14 +16,18 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 
+import javax.annotation.Nullable;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
+import com.google.common.collect.HashMultiset;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Multiset;
 import com.google.common.primitives.Longs;
 
 import eu.fbk.microneel.Post.HashtagAnnotation;
@@ -32,6 +36,9 @@ import eu.fbk.microneel.Post.UrlAnnotation;
 import eu.fbk.microneel.util.TwitterBuilder;
 import eu.fbk.utils.core.CommandLine;
 import twitter4j.HashtagEntity;
+import twitter4j.Query;
+import twitter4j.Query.ResultType;
+import twitter4j.QueryResult;
 import twitter4j.Status;
 import twitter4j.Twitter;
 import twitter4j.TwitterException;
@@ -198,6 +205,7 @@ public abstract class Enricher {
         public void enrich(final Iterable<Post> posts) throws TwitterException {
             enrichViaStatusLookup(posts);
             enrichViaUserLookup(posts);
+            enrichViaHashtagSearch(posts);
         }
 
         private void enrichViaStatusLookup(final Iterable<Post> posts) throws TwitterException {
@@ -318,6 +326,104 @@ public abstract class Enricher {
                     }
                 }
             }
+        }
+
+        // TODO: may also look for profiles matching the hashtag and use their usenames
+        
+        private void enrichViaHashtagSearch(final Iterable<Post> posts) throws TwitterException {
+
+            // Collect the hashtags that is possible & useful to search in Twitter
+            final Set<String> hashtags = new HashSet<>();
+            for (final Post post : posts) {
+                for (final HashtagAnnotation h : post.getAnnotations(HashtagAnnotation.class)) {
+                    if (h.getTokenization() == null) {
+                        hashtags.add(h.getHashtag().toLowerCase());
+                    }
+                }
+            }
+
+            // Initializa a structure holding candidate hashtag tokenizations and their counts
+            final Map<String, Multiset<String>> candidateTokenizations = new HashMap<>();
+            for (final String hashtag : hashtags) {
+                candidateTokenizations.put(hashtag, HashMultiset.create());
+            }
+
+            // Fill the structure by sending a search request (100 tweets out) for each hashtag
+            LOGGER.debug("Searching {} hashtags", hashtags.size());
+            for (final String hashtag : hashtags) {
+                final Query query = new Query("#" + hashtag);
+                query.setCount(100);
+                query.setResultType(ResultType.recent);
+                final QueryResult result = this.twitter.search(query);
+                LOGGER.debug("{} tweets for #{}", result.getTweets().size(), hashtag);
+                for (final Status status : result.getTweets()) {
+                    for (final HashtagEntity e : status.getHashtagEntities()) {
+                        final Multiset<String> multiset = candidateTokenizations
+                                .get(e.getText().toLowerCase());
+                        if (multiset != null) {
+                            final String tokenization = extractTokenization(e.getText());
+                            LOGGER.debug("Tokenization for {}: {}", e.getText(), tokenization);
+                            if (tokenization != null) {
+                                multiset.add(tokenization);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Choose the best tokenization for each hashtag
+            final Map<String, String> tokenizations = new HashMap<>();
+            for (final Map.Entry<String, Multiset<String>> entry : candidateTokenizations
+                    .entrySet()) {
+                String bestTokenization = null;
+                int bestCount = 0;
+                for (final String tokenization : entry.getValue()) {
+                    final int count = entry.getValue().count(tokenization);
+                    if (count > bestCount || count == bestCount
+                            && tokenization.length() > bestTokenization.length()) {
+                        bestTokenization = tokenization;
+                        bestCount = count;
+                    }
+                }
+                if (bestCount > 0) {
+                    tokenizations.put(entry.getKey(), bestTokenization);
+                }
+                LOGGER.debug("Tokenization for #{}: {} ({}/{} occurrences)", entry.getKey(),
+                        bestTokenization, bestCount, entry.getValue().size());
+            }
+
+            // Enrich hashtag annotations with found tokenizations
+            int numEnrichments = 0;
+            for (final Post post : posts) {
+                for (final HashtagAnnotation h : post.getAnnotations(HashtagAnnotation.class)) {
+                    if (h.getTokenization() == null) {
+                        h.setTokenization(tokenizations.get(h.getHashtag().toLowerCase()));
+                        ++numEnrichments;
+                    }
+                }
+            }
+            LOGGER.debug("{} hashtags enriched in {} posts", numEnrichments, Iterables.size(posts));
+        }
+
+        @Nullable
+        private static String extractTokenization(final String string) {
+            if (string.equals(string.toLowerCase()) || string.equals(string.toUpperCase())) {
+                return null;
+            }
+            final StringBuilder builder = new StringBuilder();
+            for (int i = 0; i < string.length(); ++i) {
+                if (i > 0) {
+                    final char c1 = string.charAt(i - 1);
+                    final char c2 = string.charAt(i);
+                    if (Character.isUpperCase(c2) && !Character.isUpperCase(c1)
+                            || Character.isDigit(c2) && !Character.isDigit(c1)
+                            || !Character.isDigit(c2) && Character.isDigit(c2)) {
+                        builder.append(' ');
+                    }
+                }
+                builder.append(string.charAt(i));
+            }
+            return builder.toString();
         }
 
         @Override
