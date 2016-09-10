@@ -3,11 +3,15 @@ package eu.fbk.microneel;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -15,26 +19,40 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
+import org.apache.commons.lang3.StringEscapeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
+import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Multiset;
+import com.google.common.io.CharStreams;
+import com.google.common.io.Resources;
 import com.google.common.primitives.Longs;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
 import eu.fbk.microneel.Post.HashtagAnnotation;
 import eu.fbk.microneel.Post.MentionAnnotation;
 import eu.fbk.microneel.Post.UrlAnnotation;
 import eu.fbk.microneel.util.TwitterBuilder;
 import eu.fbk.utils.core.CommandLine;
+import eu.fbk.utils.core.IO;
 import twitter4j.HashtagEntity;
 import twitter4j.Query;
 import twitter4j.Query.ResultType;
@@ -74,6 +92,14 @@ public abstract class Enricher {
         return new TwitterApiEnricher(Objects.requireNonNull(twitter));
     }
 
+    public static Enricher createTagdefEnricher(@Nullable final String lang) {
+        return new TagdefEnricher(lang);
+    }
+
+    public static Enricher createUrlEnricher() {
+        return UrlEnricher.INSTANCE;
+    }
+
     public static Enricher create(final Properties properties, String prefix) {
 
         // Normalize prefix, ensuring it ends with '.'
@@ -86,10 +112,21 @@ public abstract class Enricher {
         final Set<String> types = ImmutableSet
                 .copyOf(properties.getProperty(prefix + "type", "").split("\\s+"));
 
-        // Add an enricher adding triples about certain URIs, possibly recursively
+        // Add Twitter API enricher, if configured
         if (types.contains("api")) {
             enrichers.add(createTwitterApiEnricher(
                     new TwitterBuilder().setProperties(properties, prefix + "api.").build()));
+        }
+
+        // Add Tagdef enricher, if configured
+        if (types.contains("tagdef")) {
+            final String lang = properties.getProperty(prefix + "tagdef.lang");
+            enrichers.add(createTagdefEnricher(Strings.emptyToNull(lang)));
+        }
+
+        // Add a URL enricher, if configured
+        if (types.contains("url")) {
+            enrichers.add(createUrlEnricher());
         }
 
         // Combine the enrichers
@@ -329,7 +366,7 @@ public abstract class Enricher {
         }
 
         // TODO: may also look for profiles matching the hashtag and use their usenames
-        
+
         private void enrichViaHashtagSearch(final Iterable<Post> posts) throws TwitterException {
 
             // Collect the hashtags that is possible & useful to search in Twitter
@@ -429,6 +466,162 @@ public abstract class Enricher {
         @Override
         public String toString() {
             return getClass().getSimpleName() + "(" + this.twitter + ")";
+        }
+
+    }
+
+    private static class TagdefEnricher extends Enricher {
+
+        @Nullable
+        private final String lang;
+
+        TagdefEnricher(@Nullable final String lang) {
+            this.lang = lang;
+        }
+
+        @Override
+        public void enrich(final Iterable<Post> posts) throws Throwable {
+
+            // Collect the hashtags
+            final Set<String> hashtags = new HashSet<>();
+            for (final Post post : posts) {
+                for (final HashtagAnnotation h : post.getAnnotations(HashtagAnnotation.class)) {
+                    hashtags.add(h.getHashtag().toLowerCase());
+                }
+            }
+
+            // Call tagdef API
+            LOGGER.debug("Fetching definitions for {} hashtags", hashtags.size());
+            final Multimap<String, String> definitions = ArrayListMultimap.create();
+            final Gson gson = new GsonBuilder().create();
+            for (final String hashtag : hashtags) {
+                boolean found = false;
+                try {
+                    final URL url = new URL("https://api.tagdef.com/" + hashtag + ".json?no404=1"
+                            + (this.lang == null ? "" : "&lang=" + this.lang.toLowerCase()));
+                    final String response = Resources.toString(url, Charsets.UTF_8);
+                    final JsonObject json = gson.fromJson(response, JsonObject.class);
+                    final JsonElement defsElement = json.get("defs");
+                    final Iterable<JsonElement> elements = defsElement instanceof JsonArray
+                            ? (JsonArray) defsElement : ImmutableList.of(defsElement);
+                    for (final JsonElement element : elements) {
+                        final JsonObject def = ((JsonObject) element).getAsJsonObject("def");
+                        final JsonElement text = def.get("text");
+                        if (text != null) {
+                            found = true;
+                            definitions.put(hashtag, text.getAsString());
+                            LOGGER.debug("Definition found for #{}: {}", hashtag, def);
+                        }
+                    }
+                } catch (final FileNotFoundException ex) {
+                    // ignore
+                } catch (final Throwable ex) {
+                    LOGGER.warn("Ignoring exception while fetching definitions for #" + hashtag,
+                            ex);
+                }
+                if (!found) {
+                    LOGGER.debug("No definition found for #{}", hashtag);
+                }
+                Thread.sleep(500); // Wait
+            }
+
+            // Enrich posts
+            for (final Post post : posts) {
+                for (final HashtagAnnotation a : post.getAnnotations(HashtagAnnotation.class)) {
+                    final Collection<String> defs = definitions.asMap()
+                            .get(a.getHashtag().toLowerCase());
+                    if (defs != null && !defs.isEmpty()) {
+                        final List<String> newDefs = new ArrayList<>();
+                        if (a.getDefinitions() != null) {
+                            newDefs.addAll(a.getDefinitions());
+                        }
+                        newDefs.addAll(defs);
+                        a.setDefinitions(newDefs);
+                    }
+                }
+            }
+        }
+
+    }
+
+    private static final class UrlEnricher extends Enricher {
+
+        static final UrlEnricher INSTANCE = new UrlEnricher();
+
+        private static final Pattern TITLE_PATTERN = Pattern.compile("\\<title>(.*)\\</title>",
+                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+        @Override
+        public void enrich(final Iterable<Post> posts) throws Throwable {
+
+            // Collect the URLs to dereference
+            final Set<String> urls = new HashSet<>();
+            for (final Post post : posts) {
+                for (final UrlAnnotation a : post.getAnnotations(UrlAnnotation.class)) {
+                    if (a.getResolvedUrl() == null || a.getTitle() == null) {
+                        urls.add(a.getUrl());
+                    }
+                }
+            }
+
+            // Dereference URLs
+            LOGGER.debug("Fetching {} urls", urls.size());
+            final Map<String, String> resolvedUrls = new HashMap<>();
+            final Map<String, String> titles = new HashMap<>();
+            for (final String url : urls) {
+                try {
+                    LOGGER.debug("Fetching {}", url);
+                    String currentUrl = url;
+                    for (int i = 0; i < 5; ++i) {
+                        final HttpURLConnection connection = (HttpURLConnection) new URL(currentUrl)
+                                .openConnection();
+                        connection.setRequestProperty("Accept", "text/html");
+                        connection.connect();
+                        final int code = connection.getResponseCode();
+                        if (code == HttpURLConnection.HTTP_MOVED_TEMP
+                                || code == HttpURLConnection.HTTP_MOVED_PERM
+                                || code == HttpURLConnection.HTTP_SEE_OTHER) {
+                            currentUrl = connection.getHeaderField("Location");
+                        } else {
+                            if (code >= 200 && code < 300) {
+                                try {
+                                    final String content = CharStreams.toString(
+                                            new InputStreamReader(connection.getInputStream(),
+                                                    Charsets.UTF_8)); // TODO: handle others
+                                    final Matcher matcher = TITLE_PATTERN.matcher(content);
+                                    if (matcher.find()) {
+                                        String title = matcher.group(1);
+                                        final int index = title.indexOf("<");
+                                        title = index < 0 ? title : title.substring(0, index);
+                                        title = StringEscapeUtils.unescapeHtml4(title).trim();
+                                        title = title.replace('\n', ' ');
+                                        titles.put(url, title);
+                                        LOGGER.debug("Found title for {}: {}", url, title);
+                                    }
+                                    resolvedUrls.put(url, currentUrl);
+                                } finally {
+                                    IO.closeQuietly(connection.getInputStream());
+                                }
+                            }
+                            break;
+                        }
+                    }
+                } catch (final Throwable ex) {
+                    LOGGER.error("Failed fetching URL " + url, ex);
+                }
+            }
+
+            // Enrich URL annotations in posts
+            for (final Post post : posts) {
+                for (final UrlAnnotation a : post.getAnnotations(UrlAnnotation.class)) {
+                    if (a.getResolvedUrl() == null) {
+                        a.setResolvedUrl(resolvedUrls.get(a.getUrl()));
+                    }
+                    if (a.getTitle() == null) {
+                        a.setTitle(titles.get(a.getUrl()));
+                    }
+                }
+            }
         }
 
     }

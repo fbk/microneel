@@ -572,7 +572,7 @@ public final class Post implements Serializable {
             return this.definitions;
         }
 
-        public void setDefinitions(@Nullable final Set<String> definitions) {
+        public void setDefinitions(@Nullable final Iterable<String> definitions) {
             this.definitions = definitions == null ? null : ImmutableSet.copyOf(definitions);
         }
 
