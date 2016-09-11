@@ -185,14 +185,14 @@ public final class Post implements Serializable {
         return result;
     }
 
-    @Nullable
-    public Annotation getAnnotation(final int index) {
+    public List<Annotation> getAnnotations(final int index) {
+        final List<Annotation> result = new ArrayList<>();
         for (final Annotation annotation : this.annotations) {
             if (index >= annotation.getBeginIndex() && index < annotation.getEndIndex()) {
-                return annotation;
+                result.add(annotation);
             }
         }
-        return null;
+        return result;
     }
 
     public <T extends Annotation> T getAnnotation(final int index, final Class<T> annotationClazz) {
@@ -216,26 +216,34 @@ public final class Post implements Serializable {
         Preconditions.checkArgument(annotationClazz != Annotation.class);
 
         // Check for an overlapping annotations: return it if it exactly matches the requested
-        // annotation, otherwise throw an exception
+        // annotation, otherwise throw an exception if not compatible
         for (final Annotation annotation : this.annotations) {
             if (annotation.getBeginIndex() < endIndex && annotation.getEndIndex() > beginIndex) {
                 if (annotation.getBeginIndex() == beginIndex && annotation.getEndIndex() == endIndex
                         && annotationClazz.isInstance(annotation.getClass())) {
                     return annotationClazz.cast(annotation);
                 }
-                throw new IllegalArgumentException("Annotation already overlapping with inteval "
-                        + beginIndex + "," + endIndex + ": " + annotation);
+                if (annotationClazz == EntityAnnotation.class
+                        && annotation instanceof EntityAnnotation
+                        || annotationClazz != EntityAnnotation.class
+                                && !(annotation instanceof EntityAnnotation)) {
+                    throw new IllegalArgumentException(
+                            "Annotation already overlapping with inteval " + beginIndex + ","
+                                    + endIndex + ": " + annotation);
+                }
             }
         }
 
         // Create the new annotation
         Annotation annotation;
-        if (annotationClazz.isAssignableFrom(MentionAnnotation.class)) {
+        if (annotationClazz == MentionAnnotation.class) {
             annotation = new MentionAnnotation(beginIndex, endIndex);
-        } else if (annotationClazz.isAssignableFrom(HashtagAnnotation.class)) {
+        } else if (annotationClazz == HashtagAnnotation.class) {
             annotation = new HashtagAnnotation(beginIndex, endIndex);
-        } else if (annotationClazz.isAssignableFrom(UrlAnnotation.class)) {
+        } else if (annotationClazz == UrlAnnotation.class) {
             annotation = new UrlAnnotation(beginIndex, endIndex);
+        } else if (annotationClazz == EntityAnnotation.class) {
+            annotation = new EntityAnnotation(beginIndex, endIndex);
         } else {
             throw new IllegalArgumentException("Unknown annotation class: " + annotationClazz);
         }
@@ -647,6 +655,63 @@ public final class Post implements Serializable {
             }
             if (this.title != null) {
                 json.addProperty("title", this.title);
+            }
+            return json;
+        }
+
+    }
+
+    public final class EntityAnnotation extends Annotation {
+
+        private static final long serialVersionUID = 1L;
+
+        private Category category;
+
+        private String uri;
+
+        EntityAnnotation(final JsonObject json) {
+            super(json);
+            this.category = json.has("category")
+                    ? Category.valueOf(json.get("category").getAsString().toUpperCase().trim())
+                    : null;
+            this.uri = json.has("uri") ? json.get("uri").getAsString() : null;
+        }
+
+        EntityAnnotation(final int beginIndex, final int endIndex) {
+            super(beginIndex, endIndex);
+        }
+
+        public String getSurfaceForm() {
+            return getText();
+        }
+
+        @Nullable
+        public Category getCategory() {
+            return this.category;
+        }
+
+        public void setCategory(@Nullable final Category category) {
+            this.category = category;
+        }
+
+        @Nullable
+        public String getUri() {
+            return this.uri;
+        }
+
+        public void setUri(@Nullable final String uri) {
+            this.uri = uri;
+        }
+
+        @Override
+        public JsonObject toJson() {
+            final JsonObject json = super.toJson();
+            json.addProperty("surfaceForm", getSurfaceForm());
+            if (this.category != null) {
+                json.addProperty("category", this.category.toString().toLowerCase());
+            }
+            if (this.uri != null) {
+                json.addProperty("uri", this.uri);
             }
             return json;
         }
