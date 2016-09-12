@@ -100,7 +100,7 @@ public abstract class Enricher {
         return UrlEnricher.INSTANCE;
     }
 
-    public static Enricher create(final Properties properties, String prefix) {
+    public static Enricher create(final Path basePath, final Properties properties, String prefix) {
 
         // Normalize prefix, ensuring it ends with '.'
         prefix = Strings.isNullOrEmpty(prefix) ? "" : prefix.endsWith(".") ? prefix : prefix + ".";
@@ -170,7 +170,8 @@ public abstract class Enricher {
             }
 
             // Create the enricher based on the supplied configuration
-            final Enricher enricher = Enricher.create(config, configPrefix);
+            final Enricher enricher = Enricher.create(configFile.toPath().getParent(), config,
+                    configPrefix);
             LOGGER.info("Configured {}", enricher);
 
             // Read posts
@@ -192,7 +193,7 @@ public abstract class Enricher {
         }
     }
 
-    private static class ConcatEnricher extends Enricher {
+    private static final class ConcatEnricher extends Enricher {
 
         private final Enricher[] enrichers;
 
@@ -214,7 +215,7 @@ public abstract class Enricher {
 
     }
 
-    private static class NullEnricher extends Enricher {
+    private static final class NullEnricher extends Enricher {
 
         static final NullEnricher INSTANCE = new NullEnricher();
 
@@ -230,7 +231,7 @@ public abstract class Enricher {
 
     }
 
-    private static class TwitterApiEnricher extends Enricher {
+    private static final class TwitterApiEnricher extends Enricher {
 
         private final Twitter twitter;
 
@@ -470,7 +471,7 @@ public abstract class Enricher {
 
     }
 
-    private static class TagdefEnricher extends Enricher {
+    private static final class TagdefEnricher extends Enricher {
 
         @Nullable
         private final String lang;
