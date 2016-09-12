@@ -40,12 +40,14 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Multiset;
 import com.google.common.io.CharStreams;
 import com.google.common.io.Resources;
+import com.google.common.net.UrlEscapers;
 import com.google.common.primitives.Longs;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 
 import eu.fbk.microneel.Post.HashtagAnnotation;
 import eu.fbk.microneel.Post.MentionAnnotation;
@@ -88,8 +90,16 @@ public abstract class Enricher {
         return NullEnricher.INSTANCE;
     }
 
+    public static Enricher createSimpleEnricher() {
+        return SimpleEnricher.INSTANCE;
+    }
+
     public static Enricher createTwitterApiEnricher(final Twitter twitter) {
         return new TwitterApiEnricher(Objects.requireNonNull(twitter));
+    }
+
+    public static Enricher createAlignmentEnricher(final String endpoint) {
+        return new AlignmentEnricher(Objects.requireNonNull(endpoint));
     }
 
     public static Enricher createTagdefEnricher(@Nullable final String lang) {
@@ -112,6 +122,11 @@ public abstract class Enricher {
         final Set<String> types = ImmutableSet
                 .copyOf(properties.getProperty(prefix + "type", "").split("\\s+"));
 
+        // Add the simple enricher, if configured
+        if (types.contains("simple")) {
+            enrichers.add(createSimpleEnricher());
+        }
+
         // Add Twitter API enricher, if configured
         if (types.contains("api")) {
             enrichers.add(createTwitterApiEnricher(
@@ -127,6 +142,13 @@ public abstract class Enricher {
         // Add a URL enricher, if configured
         if (types.contains("url")) {
             enrichers.add(createUrlEnricher());
+        }
+
+        // Add an Alignment Enricher, if configured
+        if (types.contains("alignment")) {
+            final String endpoint = properties.getProperty(prefix + "alignment.endpoint",
+                    "https://api.futuro.media/smt/alignments");
+            enrichers.add(createAlignmentEnricher(endpoint));
         }
 
         // Combine the enrichers
@@ -231,6 +253,67 @@ public abstract class Enricher {
 
     }
 
+    private static final class SimpleEnricher extends Enricher {
+
+        static final SimpleEnricher INSTANCE = new SimpleEnricher();
+
+        private static final Pattern MENTION_PATTERN = Pattern
+                .compile("(^|[^A-Za-z0-9_])@([A-Za-z][A-Za-z0-9_]+)($|[^A-Za-z0-9_])");
+
+        private static final Pattern HASHTAG_PATTERN = Pattern.compile(
+                "(^|[^0-9_\\p{IsAlphabetic}])#([0-9]*[A-Za-z][0-9_\\p{IsAlphabetic}]+)($|[^0-9_\\p{IsAlphabetic}])");
+
+        private static final Pattern URL_PATTERN = Pattern
+                .compile("(^|[^A-Za-z0-9_])(http|https)://t.co/([A-Za-z0-9_]+)($|[^A-Za-z0-9_])");
+
+        @Override
+        public void enrich(final Post post) throws Throwable {
+
+            // Retrieve post text. Abort if text not available
+            final String text = post.getText();
+            if (text == null) {
+                return;
+            }
+
+            // Detect mentions in the text
+            Matcher m = MENTION_PATTERN.matcher(text);
+            for (int start = 0; m.find(start); start = m.end() - 1) {
+                final int begin = m.start(2) - 1;
+                final int end = m.end(2);
+                post.addAnnotation(MentionAnnotation.class, begin, end);
+            }
+
+            // Detect hashtags in the text
+            m = HASHTAG_PATTERN.matcher(text);
+            for (int start = 0; m.find(start); start = m.end() - 1) {
+                final int begin = m.start(2) - 1;
+                final int end = m.end(2);
+                post.addAnnotation(HashtagAnnotation.class, begin, end);
+            }
+
+            // Detect URLs in the text
+            m = URL_PATTERN.matcher(text);
+            for (int start = 0; m.find(start); start = m.end() - 1) {
+                final int begin = m.start(2);
+                final int end = m.end(3);
+                post.addAnnotation(UrlAnnotation.class, begin, end);
+            }
+        }
+
+        @Override
+        public void enrich(final Iterable<Post> posts) throws Throwable {
+            for (final Post post : posts) {
+                enrich(post);
+            }
+        }
+
+        @Override
+        public String toString() {
+            return getClass().getSimpleName();
+        }
+
+    }
+
     private static final class TwitterApiEnricher extends Enricher {
 
         private final Twitter twitter;
@@ -284,30 +367,42 @@ public abstract class Enricher {
                     // Enrich post author
                     final User user = status.getUser();
                     if (user != null) {
-                        if (post.getAuthorUsername() == null) {
-                            post.setAuthorUsername(user.getScreenName());
-                        }
-                        if (post.getAuthorFullName() == null) {
-                            post.setAuthorFullName(user.getName());
-                        }
-                        if (post.getAuthorDescription() == null) {
-                            post.setAuthorDescription(user.getDescription());
+                        if (post.getAuthorUsername() != null && !post.getAuthorUsername()
+                                .equalsIgnoreCase(user.getScreenName())) {
+                            LOGGER.warn("Post author does not match author from Twitter:\npost:    "
+                                    + post.getAuthorUsername() + "\ntwitter: "
+                                    + user.getScreenName());
+                        } else {
+                            if (post.getAuthorUsername() == null) {
+                                post.setAuthorUsername(user.getScreenName());
+                            }
+                            if (post.getAuthorFullName() == null) {
+                                post.setAuthorFullName(user.getName());
+                            }
+                            if (post.getAuthorDescription() == null) {
+                                post.setAuthorDescription(user.getDescription());
+                            }
                         }
                     }
 
-                    // Enrich mention / hashtag / url annotations
-                    for (final UserMentionEntity e : status.getUserMentionEntities()) {
-                        final MentionAnnotation m = post.addAnnotation(MentionAnnotation.class,
-                                e.getStart(), e.getEnd());
-                        if (m.getFullName() == null) {
-                            m.setFullName(e.getName());
+                    // Enrich mention / hashtag / url annotations if text corresponds
+                    if (post.getText() != null && !post.getText().equals(status.getText())) {
+                        LOGGER.warn("Post text does not match text from Twitter:\npost:    "
+                                + post.getText() + "\ntwitter: " + status.getText());
+                    } else {
+                        for (final UserMentionEntity e : status.getUserMentionEntities()) {
+                            final MentionAnnotation m = post.addAnnotation(MentionAnnotation.class,
+                                    e.getStart(), e.getEnd());
+                            if (m.getFullName() == null) {
+                                m.setFullName(e.getName());
+                            }
                         }
-                    }
-                    for (final HashtagEntity e : status.getHashtagEntities()) {
-                        post.addAnnotation(HashtagAnnotation.class, e.getStart(), e.getEnd());
-                    }
-                    for (final URLEntity e : status.getURLEntities()) {
-                        post.addAnnotation(UrlAnnotation.class, e.getStart(), e.getEnd());
+                        for (final HashtagEntity e : status.getHashtagEntities()) {
+                            post.addAnnotation(HashtagAnnotation.class, e.getStart(), e.getEnd());
+                        }
+                        for (final URLEntity e : status.getURLEntities()) {
+                            post.addAnnotation(UrlAnnotation.class, e.getStart(), e.getEnd());
+                        }
                     }
                 }
             }
@@ -471,6 +566,70 @@ public abstract class Enricher {
 
     }
 
+    private static final class AlignmentEnricher extends Enricher {
+
+        private final String endpoint;
+
+        AlignmentEnricher(final String endpoint) {
+            this.endpoint = endpoint.endsWith("/") ? endpoint.substring(0, endpoint.length() - 1)
+                    : endpoint;
+        }
+
+        @Override
+        public void enrich(final Iterable<Post> posts) throws Throwable {
+
+            // Collect the usernames of the users for which we may fetch alignments
+            final Set<String> usernames = new HashSet<>();
+            for (final Post post : posts) {
+                if (post.getAuthorUsername() != null && post.getAuthorUri() == null) {
+                    usernames.add(post.getAuthorUsername().toLowerCase());
+                }
+                for (final MentionAnnotation m : post.getAnnotations(MentionAnnotation.class)) {
+                    if (m.getUri() == null) {
+                        usernames.add(m.getUsername().toLowerCase());
+                    }
+                }
+            }
+
+            // Fetch alignments
+            LOGGER.debug("Looking up alignments for {} usernames", usernames.size());
+            final Gson gson = new GsonBuilder().create();
+            final Map<String, String> alignments = new HashMap<>();
+            for (final String username : usernames) {
+                final URL url = new URL(this.endpoint + "/by_twitter_username?username="
+                        + UrlEscapers.urlFormParameterEscaper().escape(username));
+                final String content = Resources.toString(url, Charsets.UTF_8);
+                final JsonObject json = gson.fromJson(content, JsonObject.class);
+                final JsonElement data = json.get("data");
+                if (data instanceof JsonObject) {
+                    final JsonElement alignment = ((JsonObject) data).get("alignment");
+                    if (alignment instanceof JsonPrimitive) {
+                        alignments.put(username, alignment.getAsString());
+                        LOGGER.debug("Alignment for {}: {}", username, alignment.getAsString());
+                    }
+                }
+            }
+
+            // Enrich posts with found alignments
+            for (final Post post : posts) {
+                if (post.getAuthorUsername() != null && post.getAuthorUri() == null) {
+                    post.setAuthorUri(alignments.get(post.getAuthorUsername().toLowerCase()));
+                }
+                for (final MentionAnnotation m : post.getAnnotations(MentionAnnotation.class)) {
+                    if (m.getUri() == null) {
+                        m.setUri(alignments.get(m.getUsername().toLowerCase()));
+                    }
+                }
+            }
+        }
+
+        @Override
+        public String toString() {
+            return getClass().getSimpleName() + "(" + this.endpoint + ")";
+        }
+
+    }
+
     private static final class TagdefEnricher extends Enricher {
 
         @Nullable
@@ -541,6 +700,11 @@ public abstract class Enricher {
                     }
                 }
             }
+        }
+
+        @Override
+        public String toString() {
+            return getClass().getSimpleName() + (this.lang == null ? "" : "(" + this.lang + ")");
         }
 
     }
@@ -623,6 +787,11 @@ public abstract class Enricher {
                     }
                 }
             }
+        }
+
+        @Override
+        public String toString() {
+            return getClass().getSimpleName();
         }
 
     }

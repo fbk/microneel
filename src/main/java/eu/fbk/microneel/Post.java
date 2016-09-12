@@ -16,6 +16,9 @@ import java.util.Set;
 
 import javax.annotation.Nullable;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -31,6 +34,8 @@ import com.google.gson.JsonObject;
 import eu.fbk.utils.core.IO;
 
 public final class Post implements Serializable {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(Post.class);
 
     private static final long serialVersionUID = 1L;
 
@@ -237,16 +242,16 @@ public final class Post implements Serializable {
         for (final Annotation annotation : this.annotations) {
             if (annotation.getBeginIndex() < endIndex && annotation.getEndIndex() > beginIndex) {
                 if (annotation.getBeginIndex() == beginIndex && annotation.getEndIndex() == endIndex
-                        && annotationClazz.isInstance(annotation.getClass())) {
+                        && annotationClazz == annotation.getClass()) {
                     return annotationClazz.cast(annotation);
                 }
                 if (annotationClazz == EntityAnnotation.class
                         && annotation instanceof EntityAnnotation
                         || annotationClazz != EntityAnnotation.class
                                 && !(annotation instanceof EntityAnnotation)) {
-                    throw new IllegalArgumentException(
-                            "Annotation already overlapping with inteval " + beginIndex + ","
-                                    + endIndex + ": " + annotation);
+                    throw new IllegalArgumentException("Cannot annotate " + beginIndex + ", "
+                            + endIndex + " with a " + annotationClazz.getSimpleName()
+                            + " as interval overlaps with " + annotation);
                 }
             }
         }
@@ -362,11 +367,23 @@ public final class Post implements Serializable {
                 line = line.trim();
                 if (!line.isEmpty() && !line.startsWith("#")) {
                     try {
-                        final Long id = Long.parseLong(line);
-                        posts.add(new Post("twitter:" + id.toString()));
-                    } catch (final NumberFormatException ex) {
                         final JsonObject json = gson.fromJson(line, JsonObject.class);
                         posts.add(new Post(json));
+                    } catch (final Throwable ex) {
+                        try {
+                            final String[] fields = line.split("\t");
+                            if (fields.length <= 2) {
+                                final Post post = new Post(
+                                        "twitter:" + Long.valueOf(fields[0].trim()).toString());
+                                if (fields.length == 2) {
+                                    post.setText(fields[1]);
+                                }
+                                posts.add(post);
+                            }
+                        } catch (final Throwable ex2) {
+                            ex.addSuppressed(ex2);
+                            LOGGER.warn("Cannot read line: " + line, ex);
+                        }
                     }
                 }
             }
