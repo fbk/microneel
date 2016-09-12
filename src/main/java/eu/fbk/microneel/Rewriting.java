@@ -1,14 +1,24 @@
 package eu.fbk.microneel;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
+
+import com.google.common.primitives.Booleans;
+import com.google.common.primitives.Ints;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
 /**
  * Encodes the rewriting of an original string into a rewritten string, allowing mapping offsets in
  * the rewritten string to corresponding offsets in the original string.
  * <p>
  * A {@code Rewriting} object is instantiated with the original string, which is then manipulated
- * via {@link #rewrite(String, String)} and {@link #rewrite(int, int, String)}. The
+ * via {@link #replace(String, String)} and {@link #replace(int, int, String)}. The
  * {@code Rewriting} objects tracks internally the performed rewrite operations, in order to allow
  * mapping offsets in the rewritten string (obtainable via {@link #getRewrittenString()}) to offsets
  * in the original string (see method {@link #toOriginalOffset(int)}).
@@ -28,6 +38,60 @@ public final class Rewriting {
     private int[] rewrittenOffsets;
 
     private boolean[] unchanged;
+
+    /**
+     * Creates a new {@code Replacement} based on the data contained in the supplied JSON object.
+     * 
+     * @param json
+     *            the JSON object, not null
+     */
+    public Rewriting(final JsonObject json) {
+        this.originalString = json.get("from").getAsString();
+        this.rewrittenString = json.get("to").getAsString();
+        if (!json.has("replacements")) {
+            this.originalOffsets = new int[] { 0, this.originalString.length() };
+            this.rewrittenOffsets = new int[] { 0, this.rewrittenString.length() };
+            this.unchanged = new boolean[] { true, true };
+        } else {
+            final Map<Integer, JsonObject> map = new TreeMap<>();
+            for (final JsonElement element : (JsonArray) json.get("replacements")) {
+                final JsonObject r = (JsonObject) element;
+                map.put(r.get("fromOffset").getAsInt(), r);
+            }
+            final List<Integer> originalOffsets = new ArrayList<>();
+            final List<Integer> rewrittenOffsets = new ArrayList<>();
+            final List<Boolean> unchanged = new ArrayList<>();
+            int originalOffset = 0;
+            int rewrittenOffset = 0;
+            for (final JsonObject replacement : map.values()) {
+                final String from = replacement.get("from").getAsString();
+                final String to = replacement.get("to").getAsString();
+                final int fromOffset = replacement.get("fromOffset").getAsInt();
+                final int toOffset = replacement.get("toOffset").getAsInt();
+                if (fromOffset > originalOffset) {
+                    originalOffsets.add(originalOffset);
+                    rewrittenOffsets.add(rewrittenOffset);
+                    unchanged.add(true);
+                }
+                originalOffsets.add(fromOffset);
+                rewrittenOffsets.add(toOffset);
+                unchanged.add(false);
+                originalOffset = fromOffset + from.length();
+                rewrittenOffset = toOffset + to.length();
+            }
+            originalOffsets.add(originalOffset);
+            rewrittenOffsets.add(rewrittenOffset);
+            unchanged.add(true);
+            if (originalOffset < this.originalString.length()) {
+                originalOffsets.add(this.originalString.length());
+                rewrittenOffsets.add(this.rewrittenString.length());
+                unchanged.add(true);
+            }
+            this.originalOffsets = Ints.toArray(originalOffsets);
+            this.rewrittenOffsets = Ints.toArray(rewrittenOffsets);
+            this.unchanged = Booleans.toArray(unchanged);
+        }
+    }
 
     /**
      * Creates a new {@code Rewriting} object operating on the specified original string.
@@ -118,7 +182,7 @@ public final class Rewriting {
      * @param replacementString
      *            the replacement string, not null
      */
-    public void rewrite(final int start, final int end, final String replacementString) {
+    public void replace(final int start, final int end, final String replacementString) {
 
         int index = -1;
         for (int i = 0; i < this.originalOffsets.length - 1; ++i) {
@@ -188,14 +252,14 @@ public final class Rewriting {
      * @param replacementString
      *            the replacement string, not null
      */
-    public void rewrite(final String replacedString, final String replacementString) {
+    public void replace(final String replacedString, final String replacementString) {
         int start = 0;
         while (true) {
             start = this.originalString.indexOf(replacedString, start);
             if (start < 0) {
                 return;
             }
-            rewrite(start, start + replacedString.length(), replacementString);
+            replace(start, start + replacedString.length(), replacementString);
             start += replacedString.length();
         }
     }
@@ -231,31 +295,42 @@ public final class Rewriting {
     }
 
     /**
+     * Returns a complete JSON representation of this object.
+     *
+     * @return a JSON representation
+     */
+    public JsonObject toJson() {
+        final JsonObject json = new JsonObject();
+        json.addProperty("from", this.originalString);
+        json.addProperty("to", this.rewrittenString);
+        final JsonArray replacements = new JsonArray();
+        for (int i = 0; i < this.originalOffsets.length - 1; ++i) {
+            if (!this.unchanged[i]) {
+                final int os = this.originalOffsets[i];
+                final int oe = this.originalOffsets[i + 1];
+                final int rs = this.rewrittenOffsets[i];
+                final int re = this.rewrittenOffsets[i + 1];
+                final JsonObject replacement = new JsonObject();
+                replacement.addProperty("from", this.originalString.substring(os, oe));
+                replacement.addProperty("fromOffset", os);
+                replacement.addProperty("to", this.rewrittenString.substring(rs, re));
+                replacement.addProperty("toOffset", rs);
+                replacements.add(replacement);
+            }
+        }
+        if (replacements.size() > 0) {
+            json.add("replacements", replacements);
+        }
+        return json;
+    }
+
+    /**
      * {@inheritDoc} The returned string contains the original and rewritten string, as well as info
      * about the rewriting status of each substring of the original string.
      */
     @Override
     public String toString() {
-        final StringBuilder builder = new StringBuilder();
-        builder.append("original:  '").append(this.originalString).append("'\n");
-        builder.append("rewritten: '").append(this.rewrittenString).append("'\n");
-        for (int i = 0; i < this.originalOffsets.length - 1; ++i) {
-            final int os = this.originalOffsets[i];
-            final int oe = this.originalOffsets[i + 1];
-            final int rs = this.rewrittenOffsets[i];
-            final int re = this.rewrittenOffsets[i + 1];
-            final String status = this.unchanged[i] ? "unchanged" : "changed";
-            builder.append("  '");
-            builder.append(this.originalString.substring(os, oe));
-            builder.append("' (");
-            builder.append(os).append(", ").append(oe).append(", ").append(status);
-            builder.append(") ==> '");
-            builder.append(this.rewrittenString.substring(rs, re));
-            builder.append("' (");
-            builder.append(rs).append(", ").append(re);
-            builder.append(")\n");
-        }
-        return builder.toString();
+        return toJson().toString();
     }
 
 }

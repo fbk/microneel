@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 
@@ -55,6 +56,12 @@ public final class Post implements Serializable {
 
     private final List<Annotation> annotations;
 
+    @Nullable
+    private Rewriting rewriting;
+
+    @Nullable
+    private String context;
+
     public Post(final JsonObject json) {
         this.id = json.get("id").getAsString();
         this.date = json.has("date") ? new Date(json.get("date").getAsLong() * 1000) : null;
@@ -80,6 +87,16 @@ public final class Post implements Serializable {
             }
         }
         Collections.sort(this.annotations);
+        if (json.has("rewriting")) {
+            final JsonObject r = json.get("rewriting").getAsJsonObject();
+            final JsonObject rc = new JsonObject();
+            for (final Entry<String, JsonElement> e : r.entrySet()) {
+                rc.add(e.getKey(), e.getValue());
+            }
+            rc.addProperty("from", this.text);
+            this.rewriting = new Rewriting(rc);
+        }
+        this.context = json.has("context") ? json.get("context").getAsString() : null;
     }
 
     public Post(final String id) {
@@ -258,6 +275,24 @@ public final class Post implements Serializable {
         return this.annotations.remove(Objects.requireNonNull(annotation));
     }
 
+    @Nullable
+    public Rewriting getRewriting() {
+        return this.rewriting;
+    }
+
+    public void setRewriting(@Nullable final Rewriting rewriting) {
+        this.rewriting = rewriting;
+    }
+
+    @Nullable
+    public String getContext() {
+        return this.context;
+    }
+
+    public void setContext(@Nullable final String context) {
+        this.context = context;
+    }
+
     @Override
     public boolean equals(final Object object) {
         if (object == this) {
@@ -302,6 +337,14 @@ public final class Post implements Serializable {
         json.add("annotations", annotations);
         for (final Annotation annotation : this.annotations) {
             annotations.add(annotation.toJson());
+        }
+        if (this.rewriting != null) {
+            final JsonObject r = this.rewriting.toJson();
+            r.remove("from");
+            json.add("rewriting", r);
+        }
+        if (this.context != null) {
+            json.addProperty("context", this.context);
         }
         return json;
     }
