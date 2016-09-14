@@ -6,6 +6,13 @@
 		"postsLinked": "training.linked.json.gz",
 		"goldStandard": "training.annotations.tsv"
 	},
+	"paths2": {
+		"postsIn": "testing.tweets.tsv",
+		"postsEnriched": "testing.enriched.json.gz",
+		"postsRewritten": "testing.rewritten.json.gz",
+		"postsLinked": "testing.linked.json.gz",
+		"goldStandard": "testing.annotations.tsv"
+	},
 	"enricher": {
 		"type": "sequence",
 		"annotators": [ {
@@ -38,11 +45,9 @@
 	"rewriter": {
 		"type": "sequence",
 		"annotators": [ {
-			"type": "eu.fbk.microneel.rewrite.HashtagRewriter"
+			"type": "eu.fbk.microneel.rewrite.AnnotationRewriter"
 		}, {
-			"type": "eu.fbk.microneel.rewrite.MentionRewriter"
-		}, {
-			"type": "eu.fbk.microneel.rewrite.UrlRewriter"
+			"type": "eu.fbk.microneel.rewrite.SlangRewriter"
 		} ]
 	},
 	"linker": {
