@@ -31,6 +31,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.io.Resources;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
 import twitter4j.Twitter;
 import twitter4j.TwitterException;
@@ -94,6 +97,66 @@ public final class TwitterBuilder {
         this.proxyPassword = null;
         this.appCredentials = new HashSet<>();
         this.userCredentials = new HashSet<>();
+    }
+
+    public TwitterBuilder setProperties(final JsonObject json) {
+
+        // Read limits, if supplied
+        if (json.has("maxConsecutiveExceptions")) {
+            this.maxConsecutiveExceptions = json.get("maxConsecutiveExceptions").getAsInt();
+        }
+        if (json.has("userRequestLimit")) {
+            this.userRequestLimit = json.get("userRequestLimit").getAsInt();
+        }
+        if (json.has("appRequestLimit")) {
+            this.appRequestLimit = json.get("appRequestLimit").getAsInt();
+        }
+        if (json.has("avgRequestSeparation")) {
+            this.avgRequestSeparation = json.get("avgRequestSeparation").getAsLong();
+        }
+
+        // Read MBean server setting
+        if (json.has("mbeanEnabled")) {
+            this.mbeanEnabled = json.get("mbeanEnabled").getAsBoolean();
+        }
+
+        // Read proxy settings, if supplied
+        if (json.has("proxyHost")) {
+            this.proxyHost = json.get("proxyHost").getAsString();
+        }
+        if (json.has("proxyPort")) {
+            this.proxyPort = json.get("proxyPort").getAsInt();
+        }
+        if (json.has("proxyUser")) {
+            this.proxyUser = json.get("proxyUser").getAsString();
+        }
+        if (json.has("proxyPassword")) {
+            this.proxyPassword = json.get("proxyPassword").getAsString();
+        }
+
+        // Read supplied account settings
+        if (json.has("credentials")) {
+            final JsonElement credentialsElement = json.get("credentials");
+            final Iterable<JsonElement> credentialsArray = credentialsElement instanceof JsonArray
+                    ? (JsonArray) credentialsElement : ImmutableList.of(credentialsElement);
+            for (final JsonElement e : credentialsArray) {
+                final JsonObject credentials = (JsonObject) e;
+                final String ck = credentials.get("consumerKey").getAsString();
+                final String cs = credentials.get("consumerSecret").getAsString();
+                final String at = credentials.has("accessToken")
+                        ? credentials.get("accessToken").getAsString() : null;
+                final String ats = credentials.has("accessTokenSecret")
+                        ? credentials.get("accessTokenSecret").getAsString() : null;
+                if (ck != null && cs != null && at != null && ats != null) {
+                    this.userCredentials.add(ImmutableList.of(ck, cs, at, ats));
+                } else if (ck != null && cs != null && at == null && ats == null) {
+                    this.appCredentials.add(ImmutableList.of(ck, cs));
+                } else if (ck != null || cs != null || at != null || ats != null) {
+                    LOGGER.warn("Incomplete credentials for consumerKey " + ck);
+                }
+            }
+        }
+        return this;
     }
 
     public TwitterBuilder setProperties(final Properties properties, final String prefix) {
@@ -333,6 +396,16 @@ public final class TwitterBuilder {
         @Override
         public Object invoke(final Object proxy, final Method method, final Object[] args)
                 throws Throwable {
+
+            // Intercept certain method and route them to this object
+            if (method.equals("toString") && args.length == 0) {
+                return toString();
+            } else if (method.equals("equals") && args.length == 1) {
+                return args[0] != null && Proxy.isProxyClass(args[0].getClass())
+                        && equals(Proxy.getInvocationHandler(args[1]));
+            } else if (method.equals("hashCode") && args.length == 0) {
+                return hashCode();
+            }
 
             // Retrieve bucket for current request
             final Bucket bucket = this.buckets.get(method.getName());

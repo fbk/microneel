@@ -1,5 +1,6 @@
-package eu.fbk.microneel;
+package eu.fbk.microneel.util;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -27,7 +28,9 @@ import com.google.gson.JsonObject;
  * This class is not thread safe.
  * </p>
  */
-public final class Rewriting {
+public final class Rewriting implements Serializable, Cloneable {
+
+    private static final long serialVersionUID = 1L;
 
     private final String originalString;
 
@@ -41,7 +44,7 @@ public final class Rewriting {
 
     /**
      * Creates a new {@code Replacement} based on the data contained in the supplied JSON object.
-     * 
+     *
      * @param json
      *            the JSON object, not null
      */
@@ -172,8 +175,9 @@ public final class Rewriting {
     }
 
     /**
-     * Replaces the substring of the original string, given by the supplied start and end indexes,
-     * with the replacement string specified.
+     * Attempts to replace the substring of the original string, given by the supplied start and end
+     * indexes, with the replacement string specified. Fails if part of the string to replace was
+     * already replaced with something else.
      *
      * @param start
      *            the start offset of the substring to replace in the original string
@@ -181,9 +185,31 @@ public final class Rewriting {
      *            the end offset of the substring to replace in the original string
      * @param replacementString
      *            the replacement string, not null
+     * @throws IllegalStateException
+     *             if the replacement cannot be performed as part of the original string to replace
+     *             was already replaced with something else
      */
     public void replace(final int start, final int end, final String replacementString) {
+        if (!tryReplace(start, end, replacementString)) {
+            throw new IllegalStateException("Range " + start + ", " + end + " already replaced");
+        }
+    }
 
+    /**
+     * Attempts to replace the substring of the original string, given by the supplied start and end
+     * indexes, with the replacement string specified. Do nothing and returns false in case part of
+     * the string to replace was already replaced with something else.
+     *
+     * @param start
+     *            the start offset of the substring to replace in the original string
+     * @param end
+     *            the end offset of the substring to replace in the original string
+     * @param replacementString
+     *            the replacement string, not null
+     * @return true if the replacement was successful, false the replacement cannot be performed as
+     *         part of the string to replace was already replaced with something else
+     */
+    public boolean tryReplace(final int start, final int end, final String replacementString) {
         int index = -1;
         for (int i = 0; i < this.originalOffsets.length - 1; ++i) {
             if (this.originalOffsets[i] <= start && this.originalOffsets[i + 1] >= end) {
@@ -198,7 +224,7 @@ public final class Rewriting {
         }
 
         if (!this.unchanged[index]) {
-            throw new IllegalArgumentException("Range " + start + ", " + end + " already replaced");
+            return false;
         }
 
         final boolean hasBefore = start > this.originalOffsets[index];
@@ -241,26 +267,73 @@ public final class Rewriting {
         this.rewrittenString = this.rewrittenString.substring(0, this.rewrittenOffsets[i])
                 + replacementString
                 + this.rewrittenString.substring(this.rewrittenOffsets[i] + end - start);
+        return true;
     }
 
     /**
      * Replaces all the occurrences of a replaced substring in the original string with the
-     * replacement string specified
+     * replacement string specified. Fails in case an occurrence of the string to replace cannot be
+     * replaced as previously replaced with something else.
      *
      * @param replacedString
      *            the substring to replace, not null
      * @param replacementString
      *            the replacement string, not null
+     * @return the number of replacements performed
      */
-    public void replace(final String replacedString, final String replacementString) {
+    public int replace(final String replacedString, final String replacementString) {
+        int result = 0;
         int start = 0;
         while (true) {
             start = this.originalString.indexOf(replacedString, start);
             if (start < 0) {
-                return;
+                return result;
             }
             replace(start, start + replacedString.length(), replacementString);
             start += replacedString.length();
+            ++result;
+        }
+    }
+
+    /**
+     * Replaces all the occurrences of a replaced substring in the original string with the
+     * replacement string specified. Ignores occurrences of the string to replace that cannot be
+     * replaced since previously replaced with something else.
+     *
+     * @param replacedString
+     *            the substring to replace, not null
+     * @param replacementString
+     *            the replacement string, not null
+     * @return the number of replacements performed
+     */
+    public int tryReplace(final String replacedString, final String replacementString) {
+        int result = 0;
+        int start = 0;
+        while (true) {
+            start = this.originalString.indexOf(replacedString, start);
+            if (start < 0) {
+                return result;
+            }
+            if (tryReplace(start, start + replacedString.length(), replacementString)) {
+                ++result;
+            }
+            start += replacedString.length();
+        }
+    }
+
+    /**
+     * {@inheritDoc} The method returns a deep clone of this object.
+     */
+    @Override
+    public Rewriting clone() {
+        try {
+            final Rewriting clone = (Rewriting) super.clone();
+            clone.originalOffsets = clone.originalOffsets.clone();
+            clone.rewrittenOffsets = clone.rewrittenOffsets.clone();
+            clone.unchanged = clone.unchanged.clone();
+            return clone;
+        } catch (final CloneNotSupportedException ex) {
+            throw new Error(ex);
         }
     }
 

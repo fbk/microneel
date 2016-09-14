@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
@@ -31,11 +33,21 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import eu.fbk.microneel.util.Rewriting;
 import eu.fbk.utils.core.IO;
 
-public final class Post implements Serializable {
+public final class Post implements Serializable, Cloneable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Post.class);
+
+    private static final Pattern MENTION_PATTERN = Pattern
+            .compile("(^|[^A-Za-z0-9_])@([A-Za-z][A-Za-z0-9_]+)($|[^A-Za-z0-9_])");
+
+    private static final Pattern HASHTAG_PATTERN = Pattern.compile(
+            "(^|[^0-9_\\p{IsAlphabetic}])#([0-9]*[A-Za-z][0-9_\\p{IsAlphabetic}]+)($|[^0-9_\\p{IsAlphabetic}])");
+
+    private static final Pattern URL_PATTERN = Pattern
+            .compile("(^|[^A-Za-z0-9_])(http|https)://t.co/([A-Za-z0-9_]+)($|[^A-Za-z0-9_])");
 
     private static final long serialVersionUID = 1L;
 
@@ -48,6 +60,9 @@ public final class Post implements Serializable {
     private String text;
 
     @Nullable
+    private String lang;
+
+    @Nullable
     private String authorUsername;
 
     @Nullable
@@ -57,6 +72,9 @@ public final class Post implements Serializable {
     private String authorDescription;
 
     @Nullable
+    private String authorLang;
+
+    @Nullable
     private String authorUri;
 
     private final List<Annotation> annotations;
@@ -64,18 +82,17 @@ public final class Post implements Serializable {
     @Nullable
     private Rewriting rewriting;
 
-    @Nullable
-    private String context;
-
     public Post(final JsonObject json) {
         this.id = json.get("id").getAsString();
         this.date = json.has("date") ? new Date(json.get("date").getAsLong() * 1000) : null;
         this.text = json.has("text") ? json.get("text").getAsString() : null;
+        this.lang = json.has("lang") ? json.get("lang").getAsString().toLowerCase() : null;
         final JsonObject author = json.getAsJsonObject("author");
         this.authorUsername = author.has("username") ? author.get("username").getAsString() : null;
         this.authorFullName = author.has("fullName") ? author.get("fullName").getAsString() : null;
         this.authorDescription = author.has("description") ? author.get("description").getAsString()
                 : null;
+        this.authorLang = author.has("lang") ? author.get("lang").getAsString() : null;
         this.authorUri = author.has("uri") ? author.get("uri").getAsString() : null;
         final JsonArray array = json.getAsJsonArray("annotations");
         this.annotations = new ArrayList<>();
@@ -101,18 +118,20 @@ public final class Post implements Serializable {
             rc.addProperty("from", this.text);
             this.rewriting = new Rewriting(rc);
         }
-        this.context = json.has("context") ? json.get("context").getAsString() : null;
     }
 
     public Post(final String id) {
         this.id = Objects.requireNonNull(id);
         this.date = null;
         this.text = null;
+        this.lang = null;
         this.authorUsername = null;
         this.authorFullName = null;
         this.authorDescription = null;
+        this.authorLang = null;
         this.authorUri = null;
         this.annotations = new ArrayList<>();
+        this.rewriting = null;
     }
 
     public String getId() {
@@ -140,9 +159,11 @@ public final class Post implements Serializable {
 
     public void setText(@Nullable final String text) {
         if (!Objects.equals(this.text, text)) {
+            this.text = text;
             if (text == null) {
                 this.annotations.clear();
             } else {
+                // Remove illegal annotations
                 for (final Iterator<Annotation> i = this.annotations.iterator(); i.hasNext();) {
                     final Annotation annotation = i.next();
                     if (annotation.getEndIndex() > text.length() || !annotation.getText().equals(
@@ -150,9 +171,41 @@ public final class Post implements Serializable {
                         i.remove();
                     }
                 }
+
+                // Detect mentions in the text
+                Matcher m = MENTION_PATTERN.matcher(text);
+                for (int start = 0; m.find(start); start = m.end() - 1) {
+                    final int begin = m.start(2) - 1;
+                    final int end = m.end(2);
+                    addAnnotation(MentionAnnotation.class, begin, end);
+                }
+
+                // Detect hashtags in the text
+                m = HASHTAG_PATTERN.matcher(text);
+                for (int start = 0; m.find(start); start = m.end() - 1) {
+                    final int begin = m.start(2) - 1;
+                    final int end = m.end(2);
+                    addAnnotation(HashtagAnnotation.class, begin, end);
+                }
+
+                // Detect URLs in the text
+                m = URL_PATTERN.matcher(text);
+                for (int start = 0; m.find(start); start = m.end() - 1) {
+                    final int begin = m.start(2);
+                    final int end = m.end(3);
+                    addAnnotation(UrlAnnotation.class, begin, end);
+                }
             }
-            this.text = text;
         }
+    }
+
+    @Nullable
+    public String getLang() {
+        return this.lang;
+    }
+
+    public void setLang(@Nullable final String lang) {
+        this.lang = lang;
     }
 
     @Nullable
@@ -181,6 +234,15 @@ public final class Post implements Serializable {
 
     public void setAuthorDescription(@Nullable final String authorDescription) {
         this.authorDescription = authorDescription;
+    }
+
+    @Nullable
+    public String getAuthorLang() {
+        return this.authorLang;
+    }
+
+    public void setAuthorLang(@Nullable final String authorLang) {
+        this.authorLang = authorLang;
     }
 
     @Nullable
@@ -249,7 +311,7 @@ public final class Post implements Serializable {
                         && annotation instanceof EntityAnnotation
                         || annotationClazz != EntityAnnotation.class
                                 && !(annotation instanceof EntityAnnotation)) {
-                    throw new IllegalArgumentException("Cannot annotate " + beginIndex + ", "
+                    throw new IllegalStateException("Cannot annotate " + beginIndex + ", "
                             + endIndex + " with a " + annotationClazz.getSimpleName()
                             + " as interval overlaps with " + annotation);
                 }
@@ -289,13 +351,134 @@ public final class Post implements Serializable {
         this.rewriting = rewriting;
     }
 
-    @Nullable
-    public String getContext() {
-        return this.context;
+    @Override
+    public Post clone() {
+        final Post clone = new Post(this.id);
+        clone.merge(this);
+        return clone;
     }
 
-    public void setContext(@Nullable final String context) {
-        this.context = context;
+    public void merge(final Post post) {
+
+        // Import date if missing in this post
+        if (this.date == null) {
+            this.date = post.date;
+        }
+
+        // Import author data from supplied post, if compatible with author data in this post
+        if (compatible(this.authorUsername, post.authorUsername)
+                && compatible(this.authorFullName, post.authorFullName)
+                && compatible(this.authorDescription, post.authorDescription)
+                && compatible(this.authorLang, post.authorLang)
+                && compatible(this.authorUri, post.authorUri)) {
+            if (this.authorUsername == null) {
+                this.authorUsername = post.authorUsername;
+            }
+            if (this.authorFullName == null) {
+                this.authorFullName = post.authorFullName;
+            }
+            if (this.authorDescription == null) {
+                this.authorDescription = post.authorDescription;
+            }
+            if (this.authorLang == null) {
+                this.authorLang = post.authorLang;
+            }
+            if (this.authorUri == null) {
+                this.authorUri = post.authorUri;
+            }
+        }
+
+        // Import other data from supplied post, if text and language are compatible
+        if (compatible(this.text, post.text) && compatible(this.lang, post.lang)) {
+
+            // Import text and language
+            if (this.text == null) {
+                this.text = post.text;
+            }
+            if (this.lang == null) {
+                this.lang = post.lang;
+            }
+
+            // Import rewriting, if missing here
+            if (this.rewriting == null && post.rewriting != null) {
+                this.rewriting = post.rewriting.clone();
+            }
+
+            // Import compatible annotations
+            for (final Annotation annotation : post.annotations) {
+                try {
+                    if (annotation instanceof MentionAnnotation) {
+                        final MentionAnnotation pa = (MentionAnnotation) annotation;
+                        final MentionAnnotation ta = addAnnotation(MentionAnnotation.class,
+                                pa.getBeginIndex(), pa.getEndIndex());
+                        if (compatible(ta.getFullName(), pa.getFullName())
+                                && compatible(ta.getDescription(), pa.getDescription())
+                                && compatible(ta.getLang(), pa.getLang())
+                                && compatible(ta.getUri(), pa.getUri())) {
+                            if (ta.getFullName() == null) {
+                                ta.setFullName(pa.getFullName());
+                            }
+                            if (ta.getDescription() == null) {
+                                ta.setDescription(pa.getDescription());
+                            }
+                            if (ta.getLang() == null) {
+                                ta.setLang(pa.getLang());
+                            }
+                            if (ta.getUri() == null) {
+                                ta.setUri(pa.getUri());
+                            }
+                        }
+                    } else if (annotation instanceof HashtagAnnotation) {
+                        final HashtagAnnotation pa = (HashtagAnnotation) annotation;
+                        final HashtagAnnotation ta = addAnnotation(HashtagAnnotation.class,
+                                pa.getBeginIndex(), pa.getEndIndex());
+                        if (compatible(ta.getTokenization(), pa.getTokenization())) {
+                            ta.setTokenization(pa.getTokenization());
+                            if (ta.getDefinitions().isEmpty()) {
+                                ta.setDefinitions(pa.getDefinitions());
+                            } else if (!pa.getDefinitions().isEmpty()) {
+                                final List<String> definitions = Lists
+                                        .newArrayList(ta.getDefinitions());
+                                definitions.addAll(pa.getDefinitions());
+                                ta.setDefinitions(ImmutableSet.copyOf(definitions));
+                            }
+                        }
+                    } else if (annotation instanceof UrlAnnotation) {
+                        final UrlAnnotation pa = (UrlAnnotation) annotation;
+                        final UrlAnnotation ta = addAnnotation(UrlAnnotation.class,
+                                pa.getBeginIndex(), pa.getEndIndex());
+                        if (compatible(ta.getResolvedUrl(), pa.getResolvedUrl())
+                                && compatible(ta.getTitle(), pa.getTitle())) {
+                            if (ta.getResolvedUrl() == null) {
+                                ta.setResolvedUrl(pa.getResolvedUrl());
+                            }
+                            if (ta.getTitle() == null) {
+                                ta.setTitle(pa.getTitle());
+                            }
+                        }
+                    } else if (annotation instanceof EntityAnnotation) {
+                        final EntityAnnotation pa = (EntityAnnotation) annotation;
+                        final EntityAnnotation ta = addAnnotation(EntityAnnotation.class,
+                                pa.getBeginIndex(), pa.getEndIndex());
+                        if (compatible(ta.getCategory(), pa.getCategory())
+                                && compatible(ta.getUri(), pa.getUri())) {
+                            if (ta.getCategory() == null) {
+                                ta.setCategory(pa.getCategory());
+                            }
+                            if (ta.getUri() == null) {
+                                ta.setUri(pa.getUri());
+                            }
+                        }
+                    }
+                } catch (final IllegalStateException ex) {
+                    // ignore: annotation not compatible with the ones in this post
+                }
+            }
+        }
+    }
+
+    private static <T> boolean compatible(final T first, final T second) {
+        return first == null || second == null || first.equals(second);
     }
 
     @Override
@@ -324,6 +507,9 @@ public final class Post implements Serializable {
         if (this.text != null) {
             json.addProperty("text", this.text);
         }
+        if (this.lang != null) {
+            json.addProperty("lang", this.lang);
+        }
         final JsonObject author = new JsonObject();
         json.add("author", author);
         if (this.authorUsername != null) {
@@ -334,6 +520,9 @@ public final class Post implements Serializable {
         }
         if (this.authorDescription != null) {
             author.addProperty("description", this.authorDescription);
+        }
+        if (this.authorLang != null) {
+            author.addProperty("lang", this.authorLang);
         }
         if (this.authorUri != null) {
             author.addProperty("uri", this.authorUri);
@@ -347,9 +536,6 @@ public final class Post implements Serializable {
             final JsonObject r = this.rewriting.toJson();
             r.remove("from");
             json.add("rewriting", r);
-        }
-        if (this.context != null) {
-            json.addProperty("context", this.context);
         }
         return json;
     }
@@ -381,8 +567,8 @@ public final class Post implements Serializable {
                                 posts.add(post);
                             }
                         } catch (final Throwable ex2) {
-                            ex.addSuppressed(ex2);
-                            LOGGER.warn("Cannot read line: " + line, ex);
+                            LOGGER.warn("Cannot read line parsed as JSON: " + line, ex);
+                            LOGGER.warn("Cannot read line parsed as TSV: " + line, ex2);
                         }
                     }
                 }
@@ -519,6 +705,9 @@ public final class Post implements Serializable {
         private String description;
 
         @Nullable
+        private String lang;
+
+        @Nullable
         private String uri;
 
         MentionAnnotation(final JsonObject json) {
@@ -527,6 +716,7 @@ public final class Post implements Serializable {
             this.fullName = json.has("fullName") ? json.get("fullName").getAsString() : null;
             this.description = json.has("description") ? json.get("description").getAsString()
                     : null;
+            this.lang = json.has("lang") ? json.get("lang").getAsString() : null;
             this.uri = json.has("uri") ? json.get("uri").getAsString() : null;
         }
 
@@ -535,6 +725,7 @@ public final class Post implements Serializable {
             this.username = getText().substring(1);
             this.fullName = null;
             this.description = null;
+            this.lang = null;
             this.uri = null;
         }
 
@@ -561,6 +752,15 @@ public final class Post implements Serializable {
         }
 
         @Nullable
+        public String getLang() {
+            return this.lang;
+        }
+
+        public void setLang(@Nullable final String lang) {
+            this.lang = lang;
+        }
+
+        @Nullable
         public String getUri() {
             return this.uri;
         }
@@ -578,6 +778,9 @@ public final class Post implements Serializable {
             }
             if (this.description != null) {
                 json.addProperty("description", this.description);
+            }
+            if (this.lang != null) {
+                json.addProperty("lang", this.lang);
             }
             if (this.uri != null) {
                 json.addProperty("uri", this.uri);

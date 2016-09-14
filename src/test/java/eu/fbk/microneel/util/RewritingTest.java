@@ -1,9 +1,11 @@
-package eu.fbk.microneel;
+package eu.fbk.microneel.util;
 
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.google.gson.JsonObject;
+
+import eu.fbk.microneel.util.Rewriting;
 
 public class RewritingTest {
 
