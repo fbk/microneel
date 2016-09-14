@@ -232,23 +232,27 @@ public final class TwitterApiEnricher implements Annotator {
         // Fill the structure by sending a search request (100 tweets out) for each hashtag
         LOGGER.debug("Searching {} hashtags", hashtags.size());
         for (final String hashtag : hashtags) {
-            final Query query = new Query("#" + hashtag);
-            query.setCount(100);
-            query.setResultType(ResultType.recent);
-            final QueryResult result = this.twitter.search(query);
-            LOGGER.debug("{} tweets for #{}", result.getTweets().size(), hashtag);
-            for (final Status status : result.getTweets()) {
-                for (final HashtagEntity e : status.getHashtagEntities()) {
-                    final Multiset<String> multiset = candidateTokenizations
-                            .get(e.getText().toLowerCase());
-                    if (multiset != null) {
-                        final String tokenization = extractTokenization(e.getText());
-                        LOGGER.debug("Tokenization for {}: {}", e.getText(), tokenization);
-                        if (tokenization != null) {
-                            multiset.add(tokenization);
+            try {
+                final Query query = new Query("#" + hashtag);
+                query.setCount(100);
+                query.setResultType(ResultType.recent);
+                final QueryResult result = this.twitter.search(query);
+                LOGGER.debug("{} tweets for #{}", result.getTweets().size(), hashtag);
+                for (final Status status : result.getTweets()) {
+                    for (final HashtagEntity e : status.getHashtagEntities()) {
+                        final Multiset<String> multiset = candidateTokenizations
+                                .get(e.getText().toLowerCase());
+                        if (multiset != null) {
+                            final String tokenization = extractTokenization(e.getText());
+                            LOGGER.debug("Tokenization for {}: {}", e.getText(), tokenization);
+                            if (tokenization != null) {
+                                multiset.add(tokenization);
+                            }
                         }
                     }
                 }
+            } catch (final Throwable ex) {
+                LOGGER.error("Search failed for hashtag " + hashtag, ex);
             }
         }
 

@@ -52,15 +52,17 @@ public class Main {
             final Path goldStandardPath = basePath.resolve(paths.get("goldStandard").getAsString());
 
             // Build enricher
-            final Annotator enricher = Annotator.create(config.getAsJsonObject("enricher"));
+            final Annotator enricher = Annotator.create(config.getAsJsonObject("enricher"),
+                    basePath);
             LOGGER.info("Configured enricher: {}", enricher);
 
             // Build rewriter
-            final Annotator rewriter = Annotator.create(config.getAsJsonObject("rewriter"));
+            final Annotator rewriter = Annotator.create(config.getAsJsonObject("rewriter"),
+                    basePath);
             LOGGER.info("Configured rewriter: {}", rewriter);
 
             // Build linker
-            final Annotator linker = Annotator.create(config.getAsJsonObject("linker"));
+            final Annotator linker = Annotator.create(config.getAsJsonObject("linker"), basePath);
             LOGGER.info("Configured linker: {}", linker);
 
             // Determine commands to execute
@@ -94,6 +96,9 @@ public class Main {
                 LOGGER.info("Scoring {} posts", posts.size());
                 // TODO
             }
+
+            // Log completion
+            LOGGER.info("Completed in {} ms", System.currentTimeMillis() - ts);
 
         } catch (final Throwable ex) {
             // Abort execution, returning appropriate error code

@@ -4,8 +4,12 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.annotation.Nullable;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Throwables;
@@ -140,7 +144,12 @@ public interface Annotator {
         }
     }
 
-    static Annotator create(final JsonObject json) {
+    static Annotator create(final JsonObject json, @Nullable Path path) {
+
+        // Use working dir if path was not supplied
+        if (path == null) {
+            path = Paths.get(System.getProperty("user.dir"));
+        }
 
         // Build/return different kinds of Annotator based on 'type' field of JSON object
         final String type = json.get("type").getAsString();
@@ -154,7 +163,7 @@ public interface Annotator {
             final JsonArray array = (JsonArray) json.get("annotators");
             if (array != null) {
                 for (final JsonElement element : array) {
-                    annotators.add(create((JsonObject) element));
+                    annotators.add(create((JsonObject) element, path));
                 }
             }
             final Annotator[] a = annotators.toArray(new Annotator[annotators.size()]);
@@ -180,8 +189,14 @@ public interface Annotator {
                     // ignore
                 }
                 try {
-                    final Constructor<?> constructor = clazz.getConstructor(JsonObject.class);
-                    return (Annotator) constructor.newInstance(json);
+                    Constructor<?> constructor;
+                    try {
+                        constructor = clazz.getConstructor(JsonObject.class);
+                        return (Annotator) constructor.newInstance(json);
+                    } catch (final NoSuchMethodException ex) {
+                        constructor = clazz.getConstructor(JsonObject.class, Path.class);
+                        return (Annotator) constructor.newInstance(json, path);
+                    }
                 } catch (final InvocationTargetException ex) {
                     throw Throwables.propagate(ex.getCause());
                 } catch (final IllegalAccessException | InstantiationException ex) {
@@ -189,7 +204,7 @@ public interface Annotator {
                             + " using constructor taking a JsonObject", ex);
                 } catch (final NoSuchMethodException ex) {
                     throw new IllegalArgumentException("Annotator class " + type
-                            + " does not define a constructor taking a JsonObject nor a static INSTANCE field");
+                            + " does not define a suitable constructor nor a static INSTANCE field");
                 }
             } catch (final ClassNotFoundException ex) {
                 throw new IllegalArgumentException("Class does not exist: " + type);
