@@ -51,20 +51,6 @@ public class Main {
             final Path postsLinkedPath = basePath.resolve(paths.get("postsLinked").getAsString());
             final Path goldStandardPath = basePath.resolve(paths.get("goldStandard").getAsString());
 
-            // Build enricher
-            final Annotator enricher = Annotator.create(config.getAsJsonObject("enricher"),
-                    basePath);
-            LOGGER.info("Configured enricher: {}", enricher);
-
-            // Build rewriter
-            final Annotator rewriter = Annotator.create(config.getAsJsonObject("rewriter"),
-                    basePath);
-            LOGGER.info("Configured rewriter: {}", rewriter);
-
-            // Build linker
-            final Annotator linker = Annotator.create(config.getAsJsonObject("linker"), basePath);
-            LOGGER.info("Configured linker: {}", linker);
-
             // Determine commands to execute
             final boolean score = cmd.hasOption("s");
             final boolean link = cmd.hasOption("l") || score && !Files.exists(postsLinkedPath);
@@ -75,18 +61,27 @@ public class Main {
             // Perform requested action(s)
             List<Post> posts = null;
             if (enrich) {
+                final Annotator enricher = Annotator.create(config.getAsJsonObject("enricher"),
+                        basePath);
+                LOGGER.info("Configured enricher: {}", enricher);
                 posts = Post.read(postsInPath);
                 LOGGER.info("Enriching {} posts", posts.size());
                 enricher.annotate(posts);
                 Post.write(postsEnrichedPath, posts);
             }
             if (rewrite) {
+                final Annotator rewriter = Annotator.create(config.getAsJsonObject("rewriter"),
+                        basePath);
+                LOGGER.info("Configured rewriter: {}", rewriter);
                 posts = posts != null ? posts : Post.read(postsEnrichedPath);
                 LOGGER.info("Rewriting {} posts", posts.size());
                 rewriter.annotate(posts);
                 Post.write(postsRewrittenPath, posts);
             }
             if (link) {
+                final Annotator linker = Annotator.create(config.getAsJsonObject("linker"),
+                        basePath);
+                LOGGER.info("Configured linker: {}", linker);
                 posts = posts != null ? posts : Post.read(postsRewrittenPath);
                 LOGGER.info("Linking {} posts", posts.size());
                 linker.annotate(posts);

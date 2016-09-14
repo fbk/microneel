@@ -5,8 +5,6 @@ import org.junit.Test;
 
 import com.google.gson.JsonObject;
 
-import eu.fbk.microneel.util.Rewriting;
-
 public class RewritingTest {
 
     @Test
@@ -15,16 +13,16 @@ public class RewritingTest {
         final Rewriting r = new Rewriting("@john ke #bellacosa #forzainter");
         printAndTest(r);
 
-        r.replace("ke", "che");
+        r.replace("ke", "che", false);
         printAndTest(r);
 
         r.replace(0, 5, "John Smith");
         printAndTest(r);
 
-        r.replace("#bellacosa", "bella cosa");
+        r.replace("#bellacosa", "bella cosa", false);
         printAndTest(r);
 
-        r.replace("#forzainter", "forza Inter");
+        r.replace("#forzainter", "forza Inter", false);
         printAndTest(r);
 
         final int s1 = r.toOriginalOffset(r.getRewrittenString().indexOf("John"));

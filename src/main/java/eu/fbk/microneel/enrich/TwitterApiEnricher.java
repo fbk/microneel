@@ -211,6 +211,8 @@ public final class TwitterApiEnricher implements Annotator {
 
     // TODO: may also look for profiles matching the hashtag and use their usenames
 
+    // TODO: also tokenize the occurrence of the hashtag in the supplied posts!!!
+
     private void enrichViaHashtagSearch(final Iterable<Post> posts) throws TwitterException {
 
         // Collect the hashtags that is possible & useful to search in Twitter

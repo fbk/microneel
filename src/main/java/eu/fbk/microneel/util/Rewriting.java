@@ -218,12 +218,7 @@ public final class Rewriting implements Serializable, Cloneable {
             }
         }
 
-        if (index < 0) {
-            throw new IllegalArgumentException("Invalid offsets " + start + ", " + end
-                    + " (string length: " + this.originalString.length() + ")");
-        }
-
-        if (!this.unchanged[index]) {
+        if (index < 0 || !this.unchanged[index]) {
             return false;
         }
 
@@ -279,13 +274,19 @@ public final class Rewriting implements Serializable, Cloneable {
      *            the substring to replace, not null
      * @param replacementString
      *            the replacement string, not null
+     * @param ignoreCase
+     *            if letter case should be ignored when matching the substrings to replace
      * @return the number of replacements performed
      */
-    public int replace(final String replacedString, final String replacementString) {
+    public int replace(String replacedString, final String replacementString,
+            final boolean ignoreCase) {
         int result = 0;
         int start = 0;
+        String originalString = this.originalString;
+        originalString = ignoreCase ? originalString.toLowerCase() : originalString;
+        replacedString = ignoreCase ? replacedString.toLowerCase() : replacedString;
         while (true) {
-            start = this.originalString.indexOf(replacedString, start);
+            start = originalString.indexOf(replacedString, start);
             if (start < 0) {
                 return result;
             }
@@ -304,13 +305,19 @@ public final class Rewriting implements Serializable, Cloneable {
      *            the substring to replace, not null
      * @param replacementString
      *            the replacement string, not null
+     * @param ignoreCase
+     *            if letter case should be ignored when matching the substrings to replace
      * @return the number of replacements performed
      */
-    public int tryReplace(final String replacedString, final String replacementString) {
+    public int tryReplace(String replacedString, final String replacementString,
+            final boolean ignoreCase) {
         int result = 0;
         int start = 0;
+        String originalString = this.originalString;
+        originalString = ignoreCase ? originalString.toLowerCase() : originalString;
+        replacedString = ignoreCase ? replacedString.toLowerCase() : replacedString;
         while (true) {
-            start = this.originalString.indexOf(replacedString, start);
+            start = originalString.indexOf(replacedString, start);
             if (start < 0) {
                 return result;
             }
