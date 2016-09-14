@@ -1,4 +1,4 @@
-package eu.fbk.microneel;
+package eu.fbk.microneel.util;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -13,16 +13,16 @@ public class RewritingTest {
         final Rewriting r = new Rewriting("@john ke #bellacosa #forzainter");
         printAndTest(r);
 
-        r.replace("ke", "che");
+        r.replace("ke", "che", false);
         printAndTest(r);
 
         r.replace(0, 5, "John Smith");
         printAndTest(r);
 
-        r.replace("#bellacosa", "bella cosa");
+        r.replace("#bellacosa", "bella cosa", false);
         printAndTest(r);
 
-        r.replace("#forzainter", "forza Inter");
+        r.replace("#forzainter", "forza Inter", false);
         printAndTest(r);
 
         final int s1 = r.toOriginalOffset(r.getRewrittenString().indexOf("John"));
