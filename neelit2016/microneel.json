@@ -51,6 +51,6 @@
 		} ]
 	},
 	"linker": {
-		"type": "nil"
+		"type": "eu.fbk.microneel.link.TintLinker"
 	}
 }
