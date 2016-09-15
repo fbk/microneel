@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
+import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
 import com.google.common.io.CharStreams;
@@ -112,27 +113,32 @@ public class Main {
                                 .directory(basePath.toFile()).redirectError(Redirect.INHERIT)
                                 .start();
                 try {
-                    double stmm = 0.0;
-                    double slm = 0.0;
-                    double ceaf = 0.0;
+                    final double[] components = new double[3]; // ceaf stmm slm
                     final List<String> output = CharStreams
                             .readLines(IO.utf8Reader(process.getInputStream()));
                     if (output.isEmpty()) {
-                        LOGGER.error("Counl not invoke 'neleval' TAC KBP evaluator "
+                        LOGGER.error("Could not invoke 'neleval' TAC KBP evaluator "
                                 + "(https://github.com/wikilinks/neleval). "
                                 + "You may install it via 'https://github.com/wikilinks/neleval' "
                                 + "(python, python-pip, python-scipy packages required)");
                     } else {
-                        for (final String line : output) {
-                            if (line.contains("strong_typed_mention_match")) {
-                                stmm = Double.parseDouble(line.split("\t")[6]);
-                            } else if (line.contains("strong_link_match")) {
-                                slm = Double.parseDouble(line.split("\t")[6]);
-                            } else if (line.contains("mention_ceaf")) {
-                                ceaf = Double.parseDouble(line.split("\t")[6]);
+                        for (int i = 0; i < output.size(); ++i) {
+                            int index = -1;
+                            final String line = output.get(i);
+                            if (line.endsWith("\tmention_ceaf")) {
+                                index = 0;
+                            } else if (line.endsWith("\tstrong_typed_mention_match")) {
+                                index = 1;
+                            } else if (line.endsWith("\tstrong_link_match")) {
+                                index = 2;
+                            }
+                            if (index >= 0) {
+                                components[index] = Double.parseDouble(line.split("\t")[6]);
+                                output.set(i, line + "   ******");
                             }
                         }
-                        final double s = 0.4 * ceaf + 0.3 * stmm + 0.3 * slm;
+                        final double s = 0.4 * components[0] + 0.3 * components[1]
+                                + 0.3 * components[2];
                         LOGGER.info("Score {} (0.4 ceaf + 0.3 stmm + 0.3 slm):\n{}", s,
                                 Joiner.on("\n").join(output));
                     }
