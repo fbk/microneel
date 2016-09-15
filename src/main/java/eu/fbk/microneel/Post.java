@@ -36,7 +36,7 @@ import com.google.gson.JsonObject;
 import eu.fbk.microneel.util.Rewriting;
 import eu.fbk.utils.core.IO;
 
-public final class Post implements Serializable, Cloneable {
+public final class Post implements Serializable, Cloneable, Comparable<Post> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Post.class);
 
@@ -479,6 +479,11 @@ public final class Post implements Serializable, Cloneable {
 
     private static <T> boolean compatible(final T first, final T second) {
         return first == null || second == null || first.equals(second);
+    }
+
+    @Override
+    public int compareTo(final Post other) {
+        return this.id.compareTo(other.id);
     }
 
     @Override

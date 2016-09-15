@@ -1,4 +1,5 @@
 asp	aspetta
+bll	bello
 bm	bimbominkia
 bmk	bimbominkia
 bn	bene
@@ -10,6 +11,7 @@ cpt	capito
 cs	cosa
 cved	ci vediamo
 dgt	digiti
+dm	domani
 dmn	domani
 dv	dove
 fb	Facebook
@@ -20,6 +22,7 @@ grz	grazie
 grx	grazie
 k	che
 ke	che
+lolloso	divertente
 mex	messaggio
 msg	messaggio
 n8	notte
@@ -41,6 +44,7 @@ pm	messaggio privato
 prg	prego
 pvt	privato
 qlc	qualche
+qlc1	qualcuno
 qlcn	qualcuno
 qlcs	qualcosa
 qlnq	qualunque
@@ -52,6 +56,9 @@ qnt	quanto
 rosik	rosicare
 scs	scusa
 sl	solo
+sn	sono
+stax	stasera
+tadb	ti amo di bene
 tat	ti amo tanto
 tba	ancora da annunciare
 tbh	ad esser sincero
@@ -65,8 +72,12 @@ tt	tutto
 ttt	tutto
 tvb	ti voglio bene
 tvtb	ti voglio tanto bene
+tvttb	ti voglio tanto tanto bene
 tv1mdb	ti voglio un mondo di bene
 tv1kb	ti voglio un casino di bene
+tv1kdb	ti voglio un casino di bene
+vvb	vi voglio bene
+vvtb	vi voglio tanto bene
 wip	lavori in corso
 x	per
 xchè	perché
