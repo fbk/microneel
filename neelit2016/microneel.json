@@ -14,7 +14,7 @@
 		"postsRewritten": "testing.rewritten.json.gz",
 		"postsLinked": "testing.linked.json.gz",
 		"postsMerged": "testing.merged.json.gz",
-		"annotationsOut": "testing.annotations.tsv"
+		"annotationsOut": "testing.results.tsv"
 	},
 	"enricher": {
 		"type": "sequence",

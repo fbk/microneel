@@ -22,18 +22,21 @@ public class MentionDumper {
 
     public static void main(final String... args) throws IOException {
 
-        final Path postsPath = Paths.get(args[0]);
-        final Path entitiesPath = Paths.get(args[1]);
-        final Path datasetPath = Paths.get(args[2]);
+        final Path datasetPath = Paths.get(args[0]);
+        final Path postsPath = Paths.get(args[1]);
+        final Path entitiesPath = args.length > 2 ? Paths.get(args[2]) : null;
 
-        final Multimap<Long, Entity> entities = HashMultimap.create();
-        for (final String line : Files.readAllLines(entitiesPath)) {
-            final String[] fields = line.split("\t");
-            final long tweetId = Long.parseLong(fields[0]);
-            final int beginIndex = Integer.parseInt(fields[1]);
-            final int endIndex = Integer.parseInt(fields[2]);
-            final Category category = Category.valueOf(fields[4].toUpperCase());
-            entities.put(tweetId, new Entity(tweetId, beginIndex, endIndex, category));
+        Multimap<Long, Entity> entities = null;
+        if (entitiesPath != null) {
+            entities = HashMultimap.create();
+            for (final String line : Files.readAllLines(entitiesPath)) {
+                final String[] fields = line.split("\t");
+                final long tweetId = Long.parseLong(fields[0]);
+                final int beginIndex = Integer.parseInt(fields[1]);
+                final int endIndex = Integer.parseInt(fields[2]);
+                final Category category = Category.valueOf(fields[4].toUpperCase());
+                entities.put(tweetId, new Entity(tweetId, beginIndex, endIndex, category));
+            }
         }
 
         final Map<String, Category> userCategories = Maps.newHashMap();
@@ -44,7 +47,8 @@ public class MentionDumper {
         final Map<String, Category> userUriCategories = Maps.newHashMap();
 
         for (final Post post : Post.read(postsPath)) {
-            final Collection<Entity> postEntities = entities.get(post.getTwitterId());
+            final Collection<Entity> postEntities = entities == null ? null
+                    : entities.get(post.getTwitterId());
             for (final MentionAnnotation a : post.getAnnotations(MentionAnnotation.class)) {
                 userCategories.putIfAbsent(a.getUsername(), null);
                 userNames.putIfAbsent(a.getUsername(), a.getFullName());
@@ -52,12 +56,14 @@ public class MentionDumper {
                 userLangs.putIfAbsent(a.getUsername(), a.getLang());
                 userUris.putIfAbsent(a.getUsername(), a.getUri());
                 userUriCategories.putIfAbsent(a.getUsername(), a.getCategory());
-                for (final Entity e : postEntities) {
-                    if (e.endIndex > a.getBeginIndex() && e.beginIndex < a.getEndIndex()) {
-                        // System.out.println(e.beginIndex - a.getBeginIndex() + " - "
-                        // + (e.endIndex - a.getEndIndex()));
-                        userCategories.put(a.getUsername(), e.category);
-                        break;
+                if (postEntities != null) {
+                    for (final Entity e : postEntities) {
+                        if (e.endIndex > a.getBeginIndex() && e.beginIndex < a.getEndIndex()) {
+                            // System.out.println(e.beginIndex - a.getBeginIndex() + " - "
+                            // + (e.endIndex - a.getEndIndex()));
+                            userCategories.put(a.getUsername(), e.category);
+                            break;
+                        }
                     }
                 }
             }

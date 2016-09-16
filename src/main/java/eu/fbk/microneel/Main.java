@@ -62,8 +62,8 @@ public class Main {
             final Path postsLinkedPath = basePath.resolve(paths.get("postsLinked").getAsString());
             final Path postsMergedPath = basePath.resolve(paths.get("postsMerged").getAsString());
             final Path annotationsOut = basePath.resolve(paths.get("annotationsOut").getAsString());
-            final Path annotationsGold = basePath
-                    .resolve(paths.get("annotationsGold").getAsString());
+            final Path annotationsGold = paths.has("annotationsGold")
+                    ? basePath.resolve(paths.get("annotationsGold").getAsString()) : null;
 
             // Determine commands to execute
             final boolean score = cmd.hasOption("s");
@@ -118,8 +118,8 @@ public class Main {
                 Process process = null;
                 process = new ProcessBuilder("python", "-m", "neleval", "evaluate", "-g",
                         tacAnnotationsGold.toString(), tacAnnotationsOut.toString())
-                        .directory(basePath.toFile()).redirectError(Redirect.INHERIT)
-                        .start();
+                                .directory(basePath.toFile()).redirectError(Redirect.INHERIT)
+                                .start();
                 try {
                     final double[] components = new double[3]; // ceaf stmm slm
                     final List<String> output = CharStreams
