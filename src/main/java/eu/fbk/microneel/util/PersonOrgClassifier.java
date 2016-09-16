@@ -9,7 +9,10 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Throwables;
+import com.google.common.primitives.Ints;
+
 import org.apache.commons.cli.*;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -124,6 +127,17 @@ public class PersonOrgClassifier {
         CSVParser parser = new CSVParser(new FileReader(dataset), CSVFormat.DEFAULT.withDelimiter('\t'));
         FileWriter svmOutput = new FileWriter(output);
 
+        boolean arff = output.getName().endsWith(".arff");
+        
+        if (arff) {
+            svmOutput.write("@RELATION mentiontype\n\n");
+            int numFeatures = UNIQUE_FEATURES + (UNIQUE_FEATURES * (UNIQUE_FEATURES - 1)) / 2;
+            for (int i = 0; i < numFeatures; ++ i) {
+                svmOutput.write("@ATTRIBUTE attr" + i + " NUMERIC\n");
+            }
+            svmOutput.write("@ATTRIBUTE class {Person,Organization,Null}\n\n@DATA\n");
+        }
+        
         boolean first = true;
         for (CSVRecord record : parser) {
             int label = getLabel(record.get(1));
@@ -134,9 +148,16 @@ public class PersonOrgClassifier {
             } else {
                 svmOutput.write('\n');
             }
-            svmOutput.write(String.valueOf(label));
-            for (int i = 0; i < features.length; i++) {
-                svmOutput.write(" "+(i+1)+":"+features[i]);
+        
+            if (arff) {
+                svmOutput.write(Joiner.on(',').join(Ints.asList(features)));
+                svmOutput.write(",");
+                svmOutput.write(label == 0 ? "Null" : label == 1 ? "Person" : "Organization");
+            } else {
+                svmOutput.write(String.valueOf(label));
+                for (int i = 0; i < features.length; i++) {
+                    svmOutput.write(" "+(i+1)+":"+features[i]);
+                }
             }
         }
         parser.close();
