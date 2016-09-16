@@ -10,6 +10,7 @@
         <Root level="info">
             <AppenderRef ref="stdout" />
         </Root>
-        <Logger name="eu.fbk" level="debug" />
+        <Logger name="eu.fbk" level="info" />
+        <Logger name="edu.stanford" level="warn" />
     </Loggers>
 </Configuration>
