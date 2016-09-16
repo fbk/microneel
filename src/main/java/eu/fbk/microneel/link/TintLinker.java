@@ -84,6 +84,10 @@ public class TintLinker implements Annotator {
         String text = rewriting.getRewrittenString();
         String mlText = text;
 
+//        if (!id.equals("286360748127571969")) {
+//            return;
+//        }
+
         TintPipeline pipeline = new TintPipeline();
         pipeline.loadDefaultProperties();
         pipeline.addProperties(properties);
@@ -201,7 +205,7 @@ public class TintLinker implements Annotator {
                 int originalBegin = rewriting.toOriginalOffset(begin);
                 int originalEnd = rewriting.toOriginalOffset(end);
                 Post.EntityAnnotation entityAnnotation = post
-                        .addAnnotation(Post.EntityAnnotation.class, originalBegin, originalEnd);
+                        .addAnnotation(Post.EntityAnnotation.class, originalBegin, originalEnd, "stanford");
                 switch (ner) {
                 case "PER":
                     entityAnnotation.setCategory(Category.PERSON);
@@ -272,7 +276,7 @@ public class TintLinker implements Annotator {
 
             try {
                 Post.EntityAnnotation entityAnnotation = post
-                        .addAnnotation(Post.EntityAnnotation.class, originalBegin, originalEnd);
+                        .addAnnotation(Post.EntityAnnotation.class, originalBegin, originalEnd, "ml");
                 entityAnnotation.setCategory(type);
                 entityAnnotation.setUri(dbpediaEntity);
             } catch (Exception e) {
