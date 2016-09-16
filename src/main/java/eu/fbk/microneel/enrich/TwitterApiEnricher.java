@@ -211,8 +211,6 @@ public final class TwitterApiEnricher implements Annotator {
 
     // TODO: may also look for profiles matching the hashtag and use their usenames
 
-    // TODO: also tokenize the occurrence of the hashtag in the supplied posts!!!
-
     private void enrichViaHashtagSearch(final Iterable<Post> posts) throws TwitterException {
 
         // Collect the hashtags that is possible & useful to search in Twitter
@@ -228,7 +226,13 @@ public final class TwitterApiEnricher implements Annotator {
         // Initializa a structure holding candidate hashtag tokenizations and their counts
         final Map<String, Multiset<String>> candidateTokenizations = new HashMap<>();
         for (final String hashtag : hashtags) {
-            candidateTokenizations.put(hashtag, HashMultiset.create());
+            final Multiset<String> multiset = HashMultiset.create();
+            final String tokenization = extractTokenization(hashtag);
+            LOGGER.debug("Tokenization for {}: {}", hashtag, tokenization);
+            if (tokenization != null) {
+                multiset.add(tokenization);
+            }
+            candidateTokenizations.put(hashtag, multiset);
         }
 
         // Fill the structure by sending a search request (100 tweets out) for each hashtag

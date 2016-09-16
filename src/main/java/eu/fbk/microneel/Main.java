@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
-import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
 import com.google.common.io.CharStreams;
@@ -44,6 +43,7 @@ public class Main {
                     .withOption("e", "enrich", "enriches input posts")
                     .withOption("r", "rewrite", "rewrites enriched posts")
                     .withOption("l", "link", "performs NERC and NEL on rewritten posts")
+                    .withOption("m", "merge", "merges entity annotations into a single layer")
                     .withOption("s", "score", "scores linking results")
                     .withLogger(LoggerFactory.getLogger("eu.fbk")).parse(args);
 
@@ -63,13 +63,15 @@ public class Main {
             final Path postsRewrittenPath = basePath
                     .resolve(paths.get("postsRewritten").getAsString());
             final Path postsLinkedPath = basePath.resolve(paths.get("postsLinked").getAsString());
+            final Path postsMergedPath = basePath.resolve(paths.get("postsMerged").getAsString());
             final Path annotationsOut = basePath.resolve(paths.get("annotationsOut").getAsString());
             final Path annotationsGold = basePath
                     .resolve(paths.get("annotationsGold").getAsString());
 
             // Determine commands to execute
             final boolean score = cmd.hasOption("s");
-            final boolean link = cmd.hasOption("l") || score && !Files.exists(postsLinkedPath);
+            final boolean merge = cmd.hasOption("m") || score && !Files.exists(postsMergedPath);
+            final boolean link = cmd.hasOption("l") || merge && !Files.exists(postsLinkedPath);
             final boolean rewrite = cmd.hasOption("r") || link && !Files.exists(postsRewrittenPath);
             final boolean enrich = cmd.hasOption("e")
                     || rewrite && !Files.exists(postsEnrichedPath);
@@ -102,6 +104,15 @@ public class Main {
                 LOGGER.info("Linking {} posts", posts.size());
                 linker.annotate(posts);
                 Post.write(postsLinkedPath, posts);
+            }
+            if (merge) {
+                final Annotator merger = Annotator.create(config.getAsJsonObject("merger"),
+                        basePath);
+                LOGGER.info("Configured merger: {}", merger);
+                posts = posts != null ? posts : Post.read(postsLinkedPath);
+                LOGGER.info("Merging {} posts", posts.size());
+                merger.annotate(posts);
+                Post.write(postsMergedPath, posts);
                 writeResults(annotationsOut, posts);
             }
             if (score) {
