@@ -1,5 +1,20 @@
 package eu.fbk.microneel;
 
+import com.google.common.base.Charsets;
+import com.google.common.base.Joiner;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Ordering;
+import com.google.common.io.CharStreams;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import eu.fbk.microneel.Post.EntityAnnotation;
+import eu.fbk.utils.core.CommandLine;
+import eu.fbk.utils.core.IO;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.Writer;
 import java.lang.ProcessBuilder.Redirect;
@@ -8,24 +23,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-
-import javax.annotation.Nullable;
-
-import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.base.Charsets;
-import com.google.common.base.Joiner;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Ordering;
-import com.google.common.io.CharStreams;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-
-import eu.fbk.microneel.Post.EntityAnnotation;
-import eu.fbk.utils.core.CommandLine;
-import eu.fbk.utils.core.IO;
 
 public class Main {
 
@@ -121,8 +118,8 @@ public class Main {
                 Process process = null;
                 process = new ProcessBuilder("python", "-m", "neleval", "evaluate", "-g",
                         tacAnnotationsGold.toString(), tacAnnotationsOut.toString())
-                                .directory(basePath.toFile()).redirectError(Redirect.INHERIT)
-                                .start();
+                        .directory(basePath.toFile()).redirectError(Redirect.INHERIT)
+                        .start();
                 try {
                     final double[] components = new double[3]; // ceaf stmm slm
                     final List<String> output = CharStreams

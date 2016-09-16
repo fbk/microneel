@@ -53,9 +53,9 @@
 		} ]
 	},
 	"linker": {
-		"type": "eu.fbk.microneel.link.MentionLinker"
+		"type": "eu.fbk.microneel.link.TintLinker"
 	},
-    "merger": {
+	"merger": {
 		"type": "eu.fbk.microneel.merge.SimpleMerger"
 	}
 }
