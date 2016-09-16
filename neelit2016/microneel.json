@@ -4,7 +4,9 @@
 		"postsEnriched": "training.enriched.json.gz",
 		"postsRewritten": "training.rewritten.json.gz",
 		"postsLinked": "training.linked.json.gz",
-		"goldStandard": "training.annotations.tsv"
+	    "postsMerged": "training.merged.json.gz",
+		"annotationsOut": "training.results.tsv",
+ 	    "annotationsGold": "training.annotations.tsv"
 	},
 	"paths2": {
 		"postsIn": "testing.tweets.tsv",
@@ -52,5 +54,8 @@
 	},
 	"linker": {
 		"type": "eu.fbk.microneel.link.TintLinker"
+	},
+	"merger": {
+		"type": "eu.fbk.microneel.merge.SimpleMerger"
 	}
 }
