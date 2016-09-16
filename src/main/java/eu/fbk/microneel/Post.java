@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
@@ -37,6 +38,8 @@ import eu.fbk.microneel.util.Rewriting;
 import eu.fbk.utils.core.IO;
 
 public final class Post implements Serializable, Cloneable, Comparable<Post> {
+
+    public static final String DEFAULT_QUALIFIER = "";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Post.class);
 
@@ -104,6 +107,8 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
                 this.annotations.add(new HashtagAnnotation(e));
             } else if (e.has("url")) {
                 this.annotations.add(new UrlAnnotation(e));
+            } else if (e.has("surfaceForm")) {
+                this.annotations.add(new EntityAnnotation(e));
             } else {
                 throw new IllegalArgumentException("Unknown annotation: " + e);
             }
@@ -259,10 +264,16 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
     }
 
     public <T extends Annotation> List<T> getAnnotations(final Class<T> annotationClazz) {
+        return getAnnotations(annotationClazz, DEFAULT_QUALIFIER);
+    }
+
+    public <T extends Annotation> List<T> getAnnotations(final Class<T> annotationClazz,
+            @Nullable final String qualifier) {
         Objects.requireNonNull(annotationClazz);
         final List<T> result = new ArrayList<>();
         for (final Annotation annotation : this.annotations) {
-            if (annotationClazz.isInstance(annotation)) {
+            if (annotationClazz.isInstance(annotation)
+                    && (qualifier == null || qualifier.equals(annotation.getQualifier()))) {
                 result.add(annotationClazz.cast(annotation));
             }
         }
@@ -279,10 +290,18 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
         return result;
     }
 
-    public <T extends Annotation> T getAnnotation(final int index, final Class<T> annotationClazz) {
+    public <T extends Annotation> T getAnnotations(final int index,
+            final Class<T> annotationClazz) {
+        return getAnnotation(index, annotationClazz, DEFAULT_QUALIFIER);
+    }
+
+    public <T extends Annotation> T getAnnotation(final int index, final Class<T> annotationClazz,
+            final String qualifier) {
+        Objects.requireNonNull(qualifier);
         for (final Annotation annotation : this.annotations) {
             if (annotationClazz.isInstance(annotation) && index >= annotation.getBeginIndex()
-                    && index < annotation.getEndIndex()) {
+                    && index < annotation.getEndIndex()
+                    && qualifier.equals(annotation.getQualifier())) {
                 return annotationClazz.cast(annotation);
             }
         }
@@ -291,11 +310,17 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
 
     public <T extends Annotation> T addAnnotation(final Class<T> annotationClazz,
             final int beginIndex, final int endIndex) {
+        return addAnnotation(annotationClazz, beginIndex, endIndex, DEFAULT_QUALIFIER);
+    }
+
+    public <T extends Annotation> T addAnnotation(final Class<T> annotationClazz,
+            final int beginIndex, final int endIndex, final String qualifier) {
 
         // Check parameters and lack of overlapping annotations
         Preconditions.checkState(this.text != null, "Post text not specified yet");
         Preconditions.checkArgument(beginIndex >= 0);
         Preconditions.checkArgument(endIndex <= this.text.length());
+        Preconditions.checkArgument(qualifier != null);
         Preconditions.checkNotNull(annotationClazz);
         Preconditions.checkArgument(annotationClazz != Annotation.class);
 
@@ -303,14 +328,15 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
         // annotation, otherwise throw an exception if not compatible
         for (final Annotation annotation : this.annotations) {
             if (annotation.getBeginIndex() < endIndex && annotation.getEndIndex() > beginIndex) {
+                final boolean sameClass = annotationClazz == annotation.getClass();
+                final boolean sameQualifier = annotation.getQualifier().equals(qualifier);
                 if (annotation.getBeginIndex() == beginIndex && annotation.getEndIndex() == endIndex
-                        && annotationClazz == annotation.getClass()) {
+                        && sameClass && sameQualifier) {
                     return annotationClazz.cast(annotation);
                 }
-                if (annotationClazz == EntityAnnotation.class
-                        && annotation instanceof EntityAnnotation
-                        || annotationClazz != EntityAnnotation.class
-                                && !(annotation instanceof EntityAnnotation)) {
+                if (sameClass && sameQualifier
+                        || !sameClass && annotationClazz != EntityAnnotation.class
+                                && annotation.getClass() != EntityAnnotation.class) {
                     throw new IllegalStateException("Cannot annotate " + beginIndex + ", "
                             + endIndex + " with a " + annotationClazz.getSimpleName()
                             + " as interval overlaps with " + annotation);
@@ -321,13 +347,13 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
         // Create the new annotation
         Annotation annotation;
         if (annotationClazz == MentionAnnotation.class) {
-            annotation = new MentionAnnotation(beginIndex, endIndex);
+            annotation = new MentionAnnotation(beginIndex, endIndex, qualifier);
         } else if (annotationClazz == HashtagAnnotation.class) {
-            annotation = new HashtagAnnotation(beginIndex, endIndex);
+            annotation = new HashtagAnnotation(beginIndex, endIndex, qualifier);
         } else if (annotationClazz == UrlAnnotation.class) {
-            annotation = new UrlAnnotation(beginIndex, endIndex);
+            annotation = new UrlAnnotation(beginIndex, endIndex, qualifier);
         } else if (annotationClazz == EntityAnnotation.class) {
-            annotation = new EntityAnnotation(beginIndex, endIndex);
+            annotation = new EntityAnnotation(beginIndex, endIndex, qualifier);
         } else {
             throw new IllegalArgumentException("Unknown annotation class: " + annotationClazz);
         }
@@ -410,7 +436,7 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
                     if (annotation instanceof MentionAnnotation) {
                         final MentionAnnotation pa = (MentionAnnotation) annotation;
                         final MentionAnnotation ta = addAnnotation(MentionAnnotation.class,
-                                pa.getBeginIndex(), pa.getEndIndex());
+                                pa.getBeginIndex(), pa.getEndIndex(), pa.getQualifier());
                         if (compatible(ta.getFullName(), pa.getFullName())
                                 && compatible(ta.getDescription(), pa.getDescription())
                                 && compatible(ta.getLang(), pa.getLang())
@@ -431,7 +457,7 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
                     } else if (annotation instanceof HashtagAnnotation) {
                         final HashtagAnnotation pa = (HashtagAnnotation) annotation;
                         final HashtagAnnotation ta = addAnnotation(HashtagAnnotation.class,
-                                pa.getBeginIndex(), pa.getEndIndex());
+                                pa.getBeginIndex(), pa.getEndIndex(), pa.getQualifier());
                         if (compatible(ta.getTokenization(), pa.getTokenization())) {
                             ta.setTokenization(pa.getTokenization());
                             if (ta.getDefinitions().isEmpty()) {
@@ -446,7 +472,7 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
                     } else if (annotation instanceof UrlAnnotation) {
                         final UrlAnnotation pa = (UrlAnnotation) annotation;
                         final UrlAnnotation ta = addAnnotation(UrlAnnotation.class,
-                                pa.getBeginIndex(), pa.getEndIndex());
+                                pa.getBeginIndex(), pa.getEndIndex(), pa.getQualifier());
                         if (compatible(ta.getResolvedUrl(), pa.getResolvedUrl())
                                 && compatible(ta.getTitle(), pa.getTitle())) {
                             if (ta.getResolvedUrl() == null) {
@@ -459,7 +485,7 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
                     } else if (annotation instanceof EntityAnnotation) {
                         final EntityAnnotation pa = (EntityAnnotation) annotation;
                         final EntityAnnotation ta = addAnnotation(EntityAnnotation.class,
-                                pa.getBeginIndex(), pa.getEndIndex());
+                                pa.getBeginIndex(), pa.getEndIndex(), pa.getQualifier());
                         if (compatible(ta.getCategory(), pa.getCategory())
                                 && compatible(ta.getUri(), pa.getUri())) {
                             if (ta.getCategory() == null) {
@@ -614,18 +640,22 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
 
         private final int endIndex;
 
+        private final String qualifier;
+
         @Nullable
         private final String text;
 
         Annotation(final JsonObject json) {
             this.beginIndex = json.get("begin").getAsInt();
             this.endIndex = json.get("end").getAsInt();
+            this.qualifier = json.has("q") ? json.get("q").getAsString() : DEFAULT_QUALIFIER;
             this.text = Post.this.text.substring(this.beginIndex, this.endIndex);
         }
 
-        Annotation(final int beginIndex, final int endIndex) {
+        Annotation(final int beginIndex, final int endIndex, final String qualifier) {
             this.beginIndex = beginIndex;
             this.endIndex = endIndex;
+            this.qualifier = qualifier;
             this.text = Post.this.text.substring(this.beginIndex, this.endIndex);
         }
 
@@ -657,6 +687,15 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
         }
 
         /**
+         * Returns a qualifier further characterizing the type of annotation (default empty string).
+         *
+         * @return the qualifier
+         */
+        public String getQualifier() {
+            return this.qualifier;
+        }
+
+        /**
          * Returns the span of text annotated by this annotation.
          *
          * @return the annotated span of text
@@ -675,6 +714,9 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
             final JsonObject json = new JsonObject();
             json.addProperty("begin", this.beginIndex);
             json.addProperty("end", this.endIndex);
+            if (!Strings.isNullOrEmpty(this.qualifier)) {
+                json.addProperty("q", this.qualifier);
+            }
             return json;
         }
 
@@ -683,7 +725,20 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
          */
         @Override
         public int compareTo(final Annotation other) {
-            return other == this ? 0 : this.beginIndex - other.beginIndex;
+            int result = this.beginIndex - other.beginIndex;
+            if (result == 0) {
+                result = this.endIndex - other.endIndex;
+                if (result == 0) {
+                    result = this.getClass().getName().compareTo(other.getClass().getName());
+                    if (result == 0) {
+                        result = this.qualifier.compareTo(other.qualifier);
+                        if (result == 0) {
+                            result = System.identityHashCode(this) - System.identityHashCode(other);
+                        }
+                    }
+                }
+            }
+            return result;
         }
 
         /**
@@ -725,8 +780,8 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
             this.uri = json.has("uri") ? json.get("uri").getAsString() : null;
         }
 
-        MentionAnnotation(final int beginIndex, final int endIndex) {
-            super(beginIndex, endIndex);
+        MentionAnnotation(final int beginIndex, final int endIndex, final String qualifier) {
+            super(beginIndex, endIndex, qualifier);
             this.username = getText().substring(1);
             this.fullName = null;
             this.description = null;
@@ -823,8 +878,8 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
             this.definitions = definitions == null ? null : ImmutableSet.copyOf(definitions);
         }
 
-        HashtagAnnotation(final int beginIndex, final int endIndex) {
-            super(beginIndex, endIndex);
+        HashtagAnnotation(final int beginIndex, final int endIndex, final String qualifier) {
+            super(beginIndex, endIndex, qualifier);
             this.hashtag = getText().substring(1);
             this.tokenization = null;
             this.definitions = null;
@@ -886,8 +941,8 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
             this.title = json.has("title") ? json.get("title").getAsString() : null;
         }
 
-        UrlAnnotation(final int beginIndex, final int endIndex) {
-            super(beginIndex, endIndex);
+        UrlAnnotation(final int beginIndex, final int endIndex, final String qualifier) {
+            super(beginIndex, endIndex, qualifier);
             this.resolvedUrl = null;
             this.title = null;
         }
@@ -945,8 +1000,8 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
             this.uri = json.has("uri") ? json.get("uri").getAsString() : null;
         }
 
-        EntityAnnotation(final int beginIndex, final int endIndex) {
-            super(beginIndex, endIndex);
+        EntityAnnotation(final int beginIndex, final int endIndex, final String qualifier) {
+            super(beginIndex, endIndex, qualifier);
         }
 
         public String getSurfaceForm() {

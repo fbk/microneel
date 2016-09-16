@@ -52,14 +52,16 @@ public final class AnnotationRewriter implements Annotator {
             }
 
             // Adjust text after the annotation
-            for (int i = a.getEndIndex(); i < text.length(); ++i) {
-                final char ch = text.charAt(i);
-                if (ch == '#' || ch == '@') {
-                    rewriting.tryReplace(a.getEndIndex(), i, ", ");
-                } else if (Character.isUpperCase(ch)) {
-                    rewriting.tryReplace(a.getEndIndex(), i, ". ");
-                } else if (!Character.isWhitespace(ch)) {
-                    break;
+            if (a.getBeginIndex() > 0 || !(a instanceof UrlAnnotation)) {
+                for (int i = a.getEndIndex(); i < text.length(); ++i) {
+                    final char ch = text.charAt(i);
+                    if (ch == '#' || ch == '@') {
+                        rewriting.tryReplace(a.getEndIndex(), i, ", ");
+                    } else if (Character.isUpperCase(ch)) {
+                        rewriting.tryReplace(a.getEndIndex(), i, ". ");
+                    } else if (!Character.isWhitespace(ch)) {
+                        break;
+                    }
                 }
             }
         }
@@ -83,7 +85,7 @@ public final class AnnotationRewriter implements Annotator {
                 break;
             }
         }
-        return builder.toString().trim();
+        return builder.toString().trim().replace('_', ' ');
     }
 
     @Override
