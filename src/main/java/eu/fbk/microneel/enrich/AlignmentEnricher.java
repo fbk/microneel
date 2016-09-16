@@ -73,7 +73,7 @@ public final class AlignmentEnricher implements Annotator {
                     final JsonElement alignment = ((JsonObject) data).get("alignment");
                     final JsonElement type = ((JsonObject) data).get("type");
                     if (type instanceof JsonPrimitive) {
-                        String typeStr = type.getAsString();
+                        final String typeStr = type.getAsString();
                         if (typeStr.equals("http://dbpedia.org/ontology/Person")) {
                             categories.put(username, Category.PERSON);
                         } else if (typeStr.equals("http://dbpedia.org/ontology/Organisation")
@@ -104,7 +104,7 @@ public final class AlignmentEnricher implements Annotator {
                 }
             }
             for (final MentionAnnotation m : post.getAnnotations(MentionAnnotation.class)) {
-                final String key = m.getUri().toLowerCase();
+                final String key = m.getUsername().toLowerCase();
                 if (m.getCategory() == null) {
                     m.setCategory(categories.get(key));
                 }
