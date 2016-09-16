@@ -21,6 +21,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 
 import eu.fbk.microneel.Annotator;
+import eu.fbk.microneel.Category;
 import eu.fbk.microneel.Post;
 import eu.fbk.microneel.Post.MentionAnnotation;
 
@@ -45,11 +46,12 @@ public final class AlignmentEnricher implements Annotator {
         // Collect the usernames of the users for which we may fetch alignments
         final Set<String> usernames = new HashSet<>();
         for (final Post post : posts) {
-            if (post.getAuthorUsername() != null && post.getAuthorUri() == null) {
+            if (post.getAuthorUsername() != null
+                    && (post.getAuthorUri() == null || post.getAuthorCategory() == null)) {
                 usernames.add(post.getAuthorUsername().toLowerCase());
             }
             for (final MentionAnnotation m : post.getAnnotations(MentionAnnotation.class)) {
-                if (m.getUri() == null) {
+                if (m.getUri() == null || m.getCategory() == null) {
                     usernames.add(m.getUsername().toLowerCase());
                 }
             }
@@ -59,6 +61,7 @@ public final class AlignmentEnricher implements Annotator {
         LOGGER.debug("Looking up alignments for {} usernames", usernames.size());
         final Gson gson = new GsonBuilder().create();
         final Map<String, String> alignments = new HashMap<>();
+        final Map<String, Category> categories = new HashMap<>();
         for (final String username : usernames) {
             try {
                 final URL url = new URL(this.endpoint + "/by_twitter_username?username="
@@ -68,6 +71,17 @@ public final class AlignmentEnricher implements Annotator {
                 final JsonElement data = json.get("data");
                 if (data instanceof JsonObject) {
                     final JsonElement alignment = ((JsonObject) data).get("alignment");
+                    final JsonElement type = ((JsonObject) data).get("type");
+                    if (type instanceof JsonPrimitive) {
+                        String typeStr = type.getAsString();
+                        if (typeStr.equals("http://dbpedia.org/ontology/Person")) {
+                            categories.put(username, Category.PERSON);
+                        } else if (typeStr.equals("http://dbpedia.org/ontology/Organisation")
+                                || typeStr.equals("http://dbpedia.org/ontology/Company")) {
+                            categories.put(username, Category.ORGANIZATION);
+                        }
+                        LOGGER.debug("Category for {}: {}", username, categories.get(username));
+                    }
                     if (alignment instanceof JsonPrimitive) {
                         alignments.put(username, alignment.getAsString());
                         LOGGER.debug("Alignment for {}: {}", username, alignment.getAsString());
@@ -80,12 +94,22 @@ public final class AlignmentEnricher implements Annotator {
 
         // Enrich posts with found alignments
         for (final Post post : posts) {
-            if (post.getAuthorUsername() != null && post.getAuthorUri() == null) {
-                post.setAuthorUri(alignments.get(post.getAuthorUsername().toLowerCase()));
+            if (post.getAuthorUsername() != null) {
+                final String key = post.getAuthorUsername().toLowerCase();
+                if (post.getAuthorCategory() == null) {
+                    post.setAuthorCategory(categories.get(key));
+                }
+                if (post.getAuthorUri() == null) {
+                    post.setAuthorUri(alignments.get(key));
+                }
             }
             for (final MentionAnnotation m : post.getAnnotations(MentionAnnotation.class)) {
+                final String key = m.getUri().toLowerCase();
+                if (m.getCategory() == null) {
+                    m.setCategory(categories.get(key));
+                }
                 if (m.getUri() == null) {
-                    m.setUri(alignments.get(m.getUsername().toLowerCase()));
+                    m.setUri(alignments.get(key));
                 }
             }
         }

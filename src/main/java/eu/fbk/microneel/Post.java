@@ -78,6 +78,9 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
     private String authorLang;
 
     @Nullable
+    private Category authorCategory;
+
+    @Nullable
     private String authorUri;
 
     private final List<Annotation> annotations;
@@ -96,6 +99,8 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
         this.authorDescription = author.has("description") ? author.get("description").getAsString()
                 : null;
         this.authorLang = author.has("lang") ? author.get("lang").getAsString() : null;
+        this.authorCategory = author.has("category")
+                ? Category.valueOf(author.get("category").getAsString().toUpperCase()) : null;
         this.authorUri = author.has("uri") ? author.get("uri").getAsString() : null;
         final JsonArray array = json.getAsJsonArray("annotations");
         this.annotations = new ArrayList<>();
@@ -134,6 +139,7 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
         this.authorFullName = null;
         this.authorDescription = null;
         this.authorLang = null;
+        this.authorCategory = null;
         this.authorUri = null;
         this.annotations = new ArrayList<>();
         this.rewriting = null;
@@ -248,6 +254,15 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
 
     public void setAuthorLang(@Nullable final String authorLang) {
         this.authorLang = authorLang;
+    }
+
+    @Nullable
+    public Category getAuthorCategory() {
+        return this.authorCategory;
+    }
+
+    public void setAuthorCategory(@Nullable final Category authorCategory) {
+        this.authorCategory = authorCategory;
     }
 
     @Nullable
@@ -396,6 +411,7 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
                 && compatible(this.authorFullName, post.authorFullName)
                 && compatible(this.authorDescription, post.authorDescription)
                 && compatible(this.authorLang, post.authorLang)
+                && compatible(this.authorCategory, post.authorCategory)
                 && compatible(this.authorUri, post.authorUri)) {
             if (this.authorUsername == null) {
                 this.authorUsername = post.authorUsername;
@@ -408,6 +424,9 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
             }
             if (this.authorLang == null) {
                 this.authorLang = post.authorLang;
+            }
+            if (this.authorCategory == null) {
+                this.authorCategory = post.authorCategory;
             }
             if (this.authorUri == null) {
                 this.authorUri = post.authorUri;
@@ -554,6 +573,9 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
         }
         if (this.authorLang != null) {
             author.addProperty("lang", this.authorLang);
+        }
+        if (this.authorCategory != null) {
+            author.addProperty("category", this.authorCategory.toString().toLowerCase());
         }
         if (this.authorUri != null) {
             author.addProperty("uri", this.authorUri);
@@ -768,6 +790,9 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
         private String lang;
 
         @Nullable
+        private Category category;
+
+        @Nullable
         private String uri;
 
         MentionAnnotation(final JsonObject json) {
@@ -777,6 +802,8 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
             this.description = json.has("description") ? json.get("description").getAsString()
                     : null;
             this.lang = json.has("lang") ? json.get("lang").getAsString() : null;
+            this.category = json.has("category")
+                    ? Category.valueOf(json.get("category").getAsString().toUpperCase()) : null;
             this.uri = json.has("uri") ? json.get("uri").getAsString() : null;
         }
 
@@ -786,6 +813,7 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
             this.fullName = null;
             this.description = null;
             this.lang = null;
+            this.category = null;
             this.uri = null;
         }
 
@@ -821,6 +849,15 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
         }
 
         @Nullable
+        public Category getCategory() {
+            return this.category;
+        }
+
+        public void setCategory(@Nullable final Category category) {
+            this.category = category;
+        }
+
+        @Nullable
         public String getUri() {
             return this.uri;
         }
@@ -841,6 +878,9 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
             }
             if (this.lang != null) {
                 json.addProperty("lang", this.lang);
+            }
+            if (this.category != null) {
+                json.addProperty("category", this.category.toString().toLowerCase());
             }
             if (this.uri != null) {
                 json.addProperty("uri", this.uri);
