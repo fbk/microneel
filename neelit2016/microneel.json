@@ -13,7 +13,8 @@
 		"postsEnriched": "testing.enriched.json.gz",
 		"postsRewritten": "testing.rewritten.json.gz",
 		"postsLinked": "testing.linked.json.gz",
-		"goldStandard": "testing.annotations.tsv"
+		"postsMerged": "testing.merged.json.gz",
+		"annotationsOut": "testing.results.tsv"
 	},
 	"enricher": {
 		"type": "sequence",

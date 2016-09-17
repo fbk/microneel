@@ -29,7 +29,9 @@ public final class SlangRewriter implements Annotator {
             for (final String line : Resources.readLines(
                     SlangRewriter.class.getResource("SlangRewriter.tsv"), Charsets.UTF_8)) {
                 final String[] fields = line.split("\t");
-                builder.put(fields[0], fields[1]);
+                if (!fields[0].startsWith("#")) {
+                    builder.put(fields[0], fields[1]);
+                }
             }
         } catch (final IOException ex) {
             throw new Error(ex);
