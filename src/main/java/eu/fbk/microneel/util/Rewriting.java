@@ -8,6 +8,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.common.primitives.Booleans;
 import com.google.common.primitives.Ints;
 import com.google.gson.JsonArray;
@@ -29,6 +32,8 @@ import com.google.gson.JsonObject;
  * </p>
  */
 public final class Rewriting implements Serializable, Cloneable {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(Rewriting.class);
 
     private static final long serialVersionUID = 1L;
 
@@ -145,12 +150,12 @@ public final class Rewriting implements Serializable, Cloneable {
                 } else {
                     int start = rewrittenOffset;
                     while (start > this.rewrittenOffsets[i]
-                            && !Character.isWhitespace(this.rewrittenString.charAt(start - 1))) {
+                            && Character.isLetterOrDigit(this.rewrittenString.charAt(start - 1))) {
                         --start;
                     }
                     int end = rewrittenOffset;
                     while (end < this.rewrittenOffsets[i + 1]
-                            && !Character.isWhitespace(this.rewrittenString.charAt(end))) {
+                            && Character.isLetterOrDigit(this.rewrittenString.charAt(end))) {
                         ++end;
                     }
                     final String rewrittenToken = this.rewrittenString.toLowerCase()
@@ -167,7 +172,21 @@ public final class Rewriting implements Serializable, Cloneable {
                         }
                     }
                     final char ch = this.originalString.charAt(this.originalOffsets[i]);
-                    return this.originalOffsets[i] + (Character.isLetterOrDigit(ch) ? 0 : 1);
+                    if (rewrittenOffset == start) {
+                        return this.originalOffsets[i] + (Character.isLetterOrDigit(ch) ? 0 : 1);
+                    } else if (rewrittenOffset == end) {
+                        return this.originalOffsets[i + 1];
+                    } else {
+                        final char c = this.rewrittenString.charAt(rewrittenOffset);
+                        int index = this.originalString.indexOf(c, this.originalOffsets[i]);
+                        if (index < 0 || index >= this.originalOffsets[i + 1]) {
+                            index = this.originalOffsets[i]
+                                    + (Character.isLetterOrDigit(ch) ? 0 : 1);
+                        }
+                        LOGGER.warn("Mapping ambiguous rewritten offset {} to {} for rewriting {}",
+                                rewrittenOffset, index, this);
+                        return index;
+                    }
                 }
             }
         }
