@@ -3,7 +3,6 @@ package eu.fbk.microneel;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
 import eu.fbk.utils.eval.ConfusionMatrix;
-import eu.fbk.utils.eval.PrecisionRecall;
 import eu.fbk.utils.svm.Classifier;
 import eu.fbk.utils.svm.LabelledVector;
 import eu.fbk.utils.svm.Vector;
@@ -27,7 +26,7 @@ public class MergeClassification {
     public static void main(String[] args) {
 
         Path completeFile = (new File("neelit2016/training.linked.json.gz")).toPath();
-        Path goldFile = (new File("neelit2016/training.annotations.original.tsv")).toPath();
+        Path goldFile = (new File("neelit2016/training.annotations.tsv")).toPath();
         String qualifierString = "ml, stanford, smt";
 
         List<LabelledVector> trainingSet = Lists.newArrayList();
@@ -45,6 +44,9 @@ public class MergeClassification {
 
             Map<String, Map<Integer, String>> gold = new HashMap<>();
 
+            int nonLinkedEntities = 0;
+            int totalGold = 0;
+
             BufferedReader reader;
             String line;
 
@@ -59,6 +61,7 @@ public class MergeClassification {
                 gold.putIfAbsent(neelID, new HashMap<>());
                 String type = parts[4];
                 gold.get(neelID).put(Integer.parseInt(parts[1]), type);
+                totalGold++;
             }
             reader.close();
 
@@ -87,6 +90,14 @@ public class MergeClassification {
                     }
                 }
 
+                if (gold.get(id) != null) {
+                    for (Integer offset : gold.get(id).keySet()) {
+                        if (features.get(offset) == null || features.get(offset).size() == 0) {
+                            nonLinkedEntities++;
+                        }
+                    }
+
+                }
                 for (Integer offset : features.keySet()) {
                     final Vector.Builder builder = Vector.builder();
                     builder.set(features.get(offset));
@@ -97,20 +108,19 @@ public class MergeClassification {
                             label = outcome.get(Category.valueOf(gold.get(id).get(offset).toUpperCase()));
                         }
                     }
+
                     LabelledVector vector = builder.build().label(label);
                     trainingSet.add(vector);
                 }
             }
 
-            final List<Classifier.Parameters> grid = Lists.newArrayList();
-            for (final float weight : new float[] { 0.25f, 0.5f, 1.0f, 2.0f, 4.0f }) {
-                grid.addAll(Classifier.Parameters.forLinearLRLossL1Reg(2,
-                        new float[] { 1f, weight }, 1f, 1f).grid(Math.max(1, 25), 10.0f));
-            }
-            final Classifier classifier = Classifier.train(grid, trainingSet,
-                    ConfusionMatrix.labelComparator(PrecisionRecall.Measure.F1, 1, true), 100000);
+            Classifier.Parameters parameters = Classifier.Parameters.forSVMLinearKernel(outcome.size() + 1, null, null);
+            ConfusionMatrix confusionMatrix = Classifier.crossValidate(parameters, trainingSet, 5, 500);
+            System.out.println(confusionMatrix.toString());
 
-            System.out.println(trainingSet.size());
+            LOGGER.info("Total gold: {}", totalGold);
+            LOGGER.info("Non-linked entities: {}", nonLinkedEntities);
+
         } catch (Exception e) {
             e.printStackTrace();
         }
