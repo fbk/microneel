@@ -11,6 +11,7 @@ import eu.fbk.microneel.Annotator;
 import eu.fbk.microneel.Category;
 import eu.fbk.microneel.Post;
 import eu.fbk.microneel.util.Rewriting;
+import eu.fbk.utils.core.FrequencyHashSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,14 +35,58 @@ public class TintLinker implements Annotator {
     MachineLinking machineLinking;
     Properties properties;
     HashMap<String, String> translations = new HashMap<>();
+    FrequencyHashSet<String> names = new FrequencyHashSet<>();
+    HashSet<String> places = new HashSet<>();
 
     public TintLinker(final JsonObject json, Path configDir) {
         try {
             Path wikiDataIndex = configDir.resolve("data/wikidata/it.csv");
+            Path nameDataIndex = configDir.resolve("data/personinfo/it.csv");
+            Path airpediaDataIndex = configDir.resolve("data/airpedia/it.csv");
+
+            BufferedReader reader;
+            String line;
+
+            LOGGER.info("Reading airpedia file");
+            reader = new BufferedReader(new FileReader(airpediaDataIndex.toFile()));
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.length() == 0) {
+                    continue;
+                }
+                String[] parts = line.split("\t");
+                String page = parts[0];
+                for (int i = 1; i < parts.length; i += 2) {
+                    String dbpClass = parts[i];
+                    if (dbpClass.equals("Place")) {
+                        places.add(page);
+                    }
+                }
+
+            }
+            reader.close();
+
+            LOGGER.info("Reading personnames file");
+            reader = new BufferedReader(new FileReader(nameDataIndex.toFile()));
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.length() == 0) {
+                    continue;
+                }
+                String[] parts = line.split("\t");
+                if (parts.length < 3) {
+                    continue;
+                }
+                String name = parts[1];
+                names.add(name);
+            }
+            reader.close();
+
+            // Fix
+            names.remove("Milan");
 
             LOGGER.info("Reading translations file");
-            BufferedReader reader = new BufferedReader(new FileReader(wikiDataIndex.toFile()));
-            String line;
+            reader = new BufferedReader(new FileReader(wikiDataIndex.toFile()));
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
                 if (line.length() == 0) {
@@ -216,7 +261,8 @@ public class TintLinker implements Annotator {
                     break;
                 }
             } catch (Exception e) {
-                LOGGER.warn("Entity conflict in NER ({}) - ({}, {}) -> ({}, {}) - {}", e.getMessage(), begin, end, originalBegin, originalEnd, post.getRewriting());
+                LOGGER.warn("Entity conflict in NER ({}) - ({}, {}) -> ({}, {}) - {}", e.getMessage(), begin, end,
+                        originalBegin, originalEnd, post.getRewriting());
             }
         }
 
@@ -226,9 +272,18 @@ public class TintLinker implements Annotator {
             Integer end = linkingTag.getOffset() + linkingTag.getLength();
             String dbpediaEntity = linkingTag.getPage();
             double score = linkingTag.getScore();
+            String originalText = linkingTag.getOriginalText();
 
             // Remove context
             if (end > text.length()) {
+                continue;
+            }
+
+            // Skipping names
+            if (names.keySet().contains(originalText)
+                    && names.get(originalText) >= 5
+                    && !places.contains(originalText)) {
+                LOGGER.debug("Skipping {}", originalText);
                 continue;
             }
 
@@ -278,7 +333,8 @@ public class TintLinker implements Annotator {
                 entityAnnotation.setCategory(type);
                 entityAnnotation.setUri(dbpediaEntity);
             } catch (Exception e) {
-                LOGGER.warn("Entity conflict in linking ({}) - ({}, {}) -> ({}, {}) - {}", e.getMessage(), begin, end, originalBegin, originalEnd, post.getRewriting());
+                LOGGER.warn("Entity conflict in linking ({}) - ({}, {}) -> ({}, {}) - {}", e.getMessage(), begin, end,
+                        originalBegin, originalEnd, post.getRewriting());
             }
         }
     }
