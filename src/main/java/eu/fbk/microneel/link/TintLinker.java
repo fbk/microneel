@@ -201,9 +201,11 @@ public class TintLinker implements Annotator {
             }
             Integer end = indexes.get(begin);
 
+            int originalBegin = -1;
+            int originalEnd = -1;
             try {
-                int originalBegin = rewriting.toOriginalOffset(begin);
-                int originalEnd = rewriting.toOriginalOffset(end);
+                originalBegin = rewriting.toOriginalOffset(begin);
+                originalEnd = rewriting.toOriginalOffset(end);
                 Post.EntityAnnotation entityAnnotation = post
                         .addAnnotation(Post.EntityAnnotation.class, originalBegin, originalEnd, "stanford");
                 switch (ner) {
@@ -218,14 +220,14 @@ public class TintLinker implements Annotator {
                     break;
                 }
             } catch (Exception e) {
-                LOGGER.warn("Entity conflict in NER ({})", e.getMessage());
+                LOGGER.warn("Entity conflict in NER ({}) - ({}, {}) -> ({}, {}) - {}", e.getMessage(), begin, end, originalBegin, originalEnd, post.getRewriting());
             }
         }
 
         // Checking linking
         for (LinkingTag linkingTag : linkingTags) {
             Integer begin = linkingTag.getOffset();
-            Integer end = linkingTag.getLength();
+            Integer end = linkingTag.getOffset() + linkingTag.getLength();
             String dbpediaEntity = linkingTag.getPage();
             double score = linkingTag.getScore();
 
@@ -280,7 +282,7 @@ public class TintLinker implements Annotator {
                 entityAnnotation.setCategory(type);
                 entityAnnotation.setUri(dbpediaEntity);
             } catch (Exception e) {
-                LOGGER.warn("Entity conflict in linking ({})", e.getMessage());
+                LOGGER.warn("Entity conflict in linking ({}) - ({}, {}) -> ({}, {}) - {}", e.getMessage(), begin, end, originalBegin, originalEnd, post.getRewriting());
             }
         }
     }
