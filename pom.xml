@@ -57,6 +57,11 @@
             <version>${utils-version}</version>
         </dependency>
         <dependency>
+            <groupId>eu.fbk.utils</groupId>
+            <artifactId>utils-svm</artifactId>
+            <version>${utils-version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
             <version>${gson-version}</version>
