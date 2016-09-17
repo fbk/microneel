@@ -97,6 +97,7 @@
 293120502074073088	67	74	NIL78	Person
 296633252976926720	27	32	http://dbpedia.org/resource/Adige	Location
 296633252976926720	82	90	http://dbpedia.org/resource/Rovereto	Location
+292155088338812929	2	15	NIL251	Person
 293386855469166592	25	37	NIL252	Person
 291051168451424256	26	36	http://dbpedia.org/resource/Silvio_Berlusconi	Person
 291051168451424256	41	51	http://dbpedia.org/resource/Mario_Monti	Person
@@ -532,6 +533,7 @@
 290954961653755904	52	65	http://dbpedia.org/resource/Giorgia_Meloni	Person
 290954961653755904	67	77	http://dbpedia.org/resource/Five_Star_Movement	Organization
 290954961653755904	1	12	http://dbpedia.org/resource/Porta_a_Porta	Product
+290954961653755904	15	28	http://dbpedia.org/resource/Giulio_Tremonti	Person
 290954961653755904	30	35	http://dbpedia.org/resource/The_People_of_Freedom	Organization
 290954961653755904	37	50	NIL41	Organization
 290954961653755904	23	28	http://dbpedia.org/resource/Mario_Monti	Person
