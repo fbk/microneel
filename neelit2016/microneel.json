@@ -6,7 +6,8 @@
 		"postsLinked": "training.linked.json.gz",
 	    "postsMerged": "training.merged.json.gz",
 		"annotationsOut": "training.results.tsv",
- 	    "annotationsGold": "training.annotations.tsv"
+ 	    "annotationsGold": "training.annotations.tsv",
+ 	    "annotationsReport": "training.report.html"
 	},
 	"paths2": {
 		"postsIn": "testing.tweets.tsv",
