@@ -70,7 +70,7 @@ public class TintLinker implements Annotator {
 
             Properties mlProperties = new Properties();
             mlProperties.setProperty("address", "http://ml.apnetwork.it/annotate");
-            mlProperties.setProperty("min_confidence", "0.5");
+            mlProperties.setProperty("min_confidence", "0.25");
             machineLinking = new MachineLinking(mlProperties);
 
         } catch (Exception e) {
@@ -83,10 +83,6 @@ public class TintLinker implements Annotator {
         String id = post.getId();
         String text = rewriting.getRewrittenString();
         String mlText = text;
-
-//        if (!id.equals("286360748127571969")) {
-//            return;
-//        }
 
         TintPipeline pipeline = new TintPipeline();
         pipeline.loadDefaultProperties();
