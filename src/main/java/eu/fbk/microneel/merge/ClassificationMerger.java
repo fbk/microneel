@@ -138,7 +138,8 @@ public class ClassificationMerger implements Annotator {
 
         try {
             LOGGER.info("Perform training ({}/{})", i + 1, split);
-            Classifier.Parameters parameters = Classifier.Parameters.forSVMLinearKernel(outcome.size() + 1, null, null);
+            Classifier.Parameters parameters = Classifier.Parameters
+                    .forSVMPolyKernel(outcome.size() + 1, null, null, null, null, null);
             classifier = Classifier.train(parameters, trainingSet);
         } catch (Exception e) {
             e.printStackTrace();
@@ -183,15 +184,8 @@ public class ClassificationMerger implements Annotator {
                 } catch (final Throwable ex) {
                     // Ignore
                 }
-
-//                System.out.println(offset);
-//                System.out.println(features.get(offset));
-//                System.out.println(predict);
-//                System.out.println();
             }
-
         }
-
     }
 
     private HashMultimap<Integer, String> extractFeatures(Post post) {
