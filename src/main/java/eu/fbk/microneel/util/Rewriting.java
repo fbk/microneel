@@ -147,6 +147,21 @@ public final class Rewriting implements Serializable, Cloneable {
                 final int delta = rewrittenOffset - this.rewrittenOffsets[i];
                 if (this.unchanged[i]) {
                     return this.originalOffsets[i] + delta;
+                } else if (rewrittenOffset == this.rewrittenOffsets[i]) {
+                    final char c = this.rewrittenString.charAt(rewrittenOffset);
+                    int offset = this.originalOffsets[i];
+                    if (Character.isLetterOrDigit(c)) {
+                        while (offset < this.originalString.length()
+                                && !Character.isLetterOrDigit(this.originalString.charAt(offset))) {
+                            ++offset;
+                        }
+                    } else {
+                        while (offset > 0 && !Character
+                                .isLetterOrDigit(this.originalString.charAt(offset - 1))) {
+                            --offset;
+                        }
+                    }
+                    return offset;
                 } else {
                     int start = rewrittenOffset;
                     while (start > this.rewrittenOffsets[i]
@@ -167,25 +182,15 @@ public final class Rewriting implements Serializable, Cloneable {
                         final int index = originalToken.indexOf(rewrittenToken);
                         if (index >= 0) {
                             final int originalStart = this.originalString.toLowerCase()
-                                    .indexOf(originalToken);
+                                    .indexOf(originalToken, this.originalOffsets[i]);
                             return originalStart + index + rewrittenOffset - start;
                         }
                     }
-                    final char ch = this.originalString.charAt(this.originalOffsets[i]);
-                    if (rewrittenOffset == start) {
-                        return this.originalOffsets[i] + (Character.isLetterOrDigit(ch) ? 0 : 1);
-                    } else if (rewrittenOffset == end) {
+                    if (rewrittenOffset == end) {
                         return this.originalOffsets[i + 1];
                     } else {
-                        final char c = this.rewrittenString.charAt(rewrittenOffset);
-                        int index = this.originalString.indexOf(c, this.originalOffsets[i]);
-                        if (index < 0 || index >= this.originalOffsets[i + 1]) {
-                            index = this.originalOffsets[i]
-                                    + (Character.isLetterOrDigit(ch) ? 0 : 1);
-                        }
-                        LOGGER.warn("Mapping ambiguous rewritten offset {} to {} for rewriting {}",
-                                rewrittenOffset, index, this);
-                        return index;
+                        final char c = this.originalString.charAt(this.originalOffsets[i]);
+                        return this.originalOffsets[i] + (c == '#' || c == '@' ? 1 : 0);
                     }
                 }
             }
