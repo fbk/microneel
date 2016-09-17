@@ -1,20 +1,5 @@
 package eu.fbk.microneel;
 
-import com.google.common.base.Charsets;
-import com.google.common.base.Joiner;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Ordering;
-import com.google.common.io.CharStreams;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-import eu.fbk.microneel.Post.EntityAnnotation;
-import eu.fbk.utils.core.CommandLine;
-import eu.fbk.utils.core.IO;
-import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.Writer;
 import java.lang.ProcessBuilder.Redirect;
@@ -23,6 +8,24 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+
+import javax.annotation.Nullable;
+
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.Charsets;
+import com.google.common.base.Joiner;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Ordering;
+import com.google.common.io.CharStreams;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+
+import eu.fbk.microneel.Post.EntityAnnotation;
+import eu.fbk.utils.core.CommandLine;
+import eu.fbk.utils.core.IO;
 
 public class Main {
 
@@ -115,6 +118,10 @@ public class Main {
             if (score) {
                 final Path tacAnnotationsOut = toTacFormat(annotationsOut, null);
                 final Path tacAnnotationsGold = toTacFormat(annotationsGold, null);
+                LOGGER.info("Validating gold annotations");
+                validateAnnotations(postsMergedPath, annotationsGold);
+                LOGGER.info("Validating system annotations");
+                validateAnnotations(postsMergedPath, annotationsOut);
                 Process process = null;
                 process = new ProcessBuilder("python", "-m", "neleval", "evaluate", "-g",
                         tacAnnotationsGold.toString(), tacAnnotationsOut.toString())
@@ -161,6 +168,59 @@ public class Main {
         } catch (final Throwable ex) {
             // Abort execution, returning appropriate error code
             CommandLine.fail(ex);
+        }
+    }
+
+    private static void validateAnnotations(final Path postsPath, final Path annotationsPath)
+            throws IOException {
+
+        // Load posts
+        final Map<Long, Post> posts = Maps.newHashMap();
+        for (final Post post : Post.read(postsPath)) {
+            posts.put(post.getTwitterId(), post);
+        }
+
+        // Load and validate annotations
+        int lineNum = 0;
+        for (String line : Files.readAllLines(annotationsPath)) {
+            ++lineNum;
+            line = line.trim();
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
+            final String[] fields = line.split("\t");
+            try {
+                final long twitterId = Long.parseLong(fields[0].trim());
+                final int beginIndex = Integer.parseInt(fields[1].trim());
+                final int endIndex = Integer.parseInt(fields[2].trim());
+                final String uri = fields[3].trim();
+                final Category category = Category.valueOf(fields[4].trim().toUpperCase());
+                final Post post = posts.get(twitterId);
+                if (post == null) {
+                    LOGGER.warn("Annotation #{} references unknown tweet {}: {}", lineNum,
+                            twitterId, line);
+                    continue;
+                }
+                final EntityAnnotation existing = post.getAnnotation(beginIndex,
+                        EntityAnnotation.class, "gold");
+                if (existing != null && existing.getBeginIndex() == beginIndex
+                        && existing.getEndIndex() == endIndex) {
+                    LOGGER.warn("Duplicate annotation #{}: {}", lineNum, line);
+                }
+                try {
+                    final EntityAnnotation annotation = post.addAnnotation(EntityAnnotation.class,
+                            beginIndex, endIndex, "gold");
+                    annotation.setCategory(category);
+                    annotation.setUri(uri);
+                    if (annotation.getBeginIndex() == annotation.getEndIndex()) {
+                        LOGGER.warn("Empty annotation #{}: {}", lineNum, line);
+                    }
+                } catch (final Throwable ex) {
+                    LOGGER.warn("Overlapping annotation #{}: {}", lineNum, line);
+                }
+            } catch (final Throwable ex) {
+                LOGGER.warn("Could not process annotation #{}: {}", lineNum, line);
+            }
         }
     }
 
