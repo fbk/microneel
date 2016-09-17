@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MICRONEEL</title>
+<link href="css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css">
+<!--[if lt IE 9]>
+<script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
+<script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+<![endif]-->
+<style>
+	.navbar a { color: #cfc0a1; }
+	.navbar { margin-bottom: 0px; }
+	.jumbotron h1 { margin-top: 0px }
+	a { color: #8a1e03 }
+	table.annotations { width: 100% }
+	td.system, th.system { width: 40% }
+	td.gold, th.gold { width: 40% }
+	td.match, th.match { witdh: 20% }
+	p.tweet-original { }
+	p.tweet-rewritten { margin: 0px; font-size: 90% }
+	p.tweet-id { margin: 0px; font-size: 90% }
+	.match-full { background-color: green }
+	.match-part { background-color: yellow }
+	.match-none { background-color: red }
+	.table-striped > tbody > tr:nth-child(2n+1) > td, .table-striped > tbody > tr:nth-child(2n+1) > th { background-color: #F7EBD2; }
+</style>
+</head>
+<body>
+
+<div class="jumbotron"  style="background-color: #831d1c; color: #cfc0a1">
+<div class="container-fluid">
+<h1 class="display-3">MICRONEEL</h1>
+<p>Annotations found vs gold annotations</p>
+</div>
+</div>
+    
+<div class="container-fluid">
+<table class="table table-striped table-hover table-sm">
+<tbody>
+
+<thead>
+<tr>
+<th>Tweet</th>
+<th>
+<table class="annotations">
+<tr>
+<th class="system">System annotation</th>
+<th class="gold">Gold annotation</th>
+<th class="match">Match</th>
+</tr>
+</table>
+</th>
+</tr>
+</thead>
+
+${body}
+
+<tr>
+<td>
+<p class="tweet-original">#Berlusconi #Bersani #Monti #Grillo anche di notte!!! #ecchepalle.. Cambiate incubo ...</p>
+<p class="tweet-id">294945116454518784</p>
+<p class="tweet-rewritten">Berlusconi, Bersani, Monti, Grillo anche di notte!!! ecchepalle.. Cambiate incubo ...</p>
+</td>
+<td>
+<table class="annotations">
+<tr>
+<td class="system">
+Berlusconi (1,11,person,Silvio_Berlusconi)
+</td>
+<td class="gold">
+Berlusconi (1,11,person,Silvio_Berlusconi)
+</td>
+<td class="match match-full">
+</td>
+</tr>
+
+<tr>
+<td>
+Bersani (13,20,person,Pier_Luigi_Bersani)
+</td>
+<td>
+Bersani (13,20,person,Pier_Luigi_Bersani)
+</td>
+<td class="match match-part">
+</td>
+</tr>
+
+<tr>
+<td>
+Monti (22,27,person,Mario_Monti)
+</td>
+<td>
+Monti (22,27,person,Mario_Monti)
+</td>
+<td class="match match-part">
+</td>
+</tr>
+
+<tr>
+<td>
+Grillo (29,35,person,Beppe_Grillo)
+</td>
+<td>
+Grillo (29,35,person,Beppe_Grillo)
+</td>
+<td class="match match-none">
+</td>
+</tr>
+
+</table>
+</td>
+</tr>
+
+</tbody>
+</table>
+</div>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+</body>
+</html>
+
+
+

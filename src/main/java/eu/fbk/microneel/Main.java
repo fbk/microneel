@@ -6,6 +6,7 @@ import java.lang.ProcessBuilder.Redirect;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -17,9 +18,14 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
+import com.google.common.base.Objects;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
+import com.google.common.escape.Escaper;
+import com.google.common.html.HtmlEscapers;
 import com.google.common.io.CharStreams;
+import com.google.common.io.Resources;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 
@@ -67,6 +73,8 @@ public class Main {
             final Path annotationsOut = basePath.resolve(paths.get("annotationsOut").getAsString());
             final Path annotationsGold = paths.has("annotationsGold")
                     ? basePath.resolve(paths.get("annotationsGold").getAsString()) : null;
+            final Path annotationsReportPath = paths.has("annotationsReport")
+                    ? basePath.resolve(paths.get("annotationsReport").getAsString()) : null;
 
             // Determine commands to execute
             final boolean score = cmd.hasOption("s");
@@ -116,12 +124,10 @@ public class Main {
                 writeResults(annotationsOut, posts);
             }
             if (score) {
+                posts = posts != null ? posts : Post.read(postsMergedPath);
+                injectAnnotations(posts, annotationsGold, "gold");
                 final Path tacAnnotationsOut = toTacFormat(annotationsOut, null);
                 final Path tacAnnotationsGold = toTacFormat(annotationsGold, null);
-                LOGGER.info("Validating gold annotations");
-                validateAnnotations(postsMergedPath, annotationsGold);
-                LOGGER.info("Validating system annotations");
-                validateAnnotations(postsMergedPath, annotationsOut);
                 Process process = null;
                 process = new ProcessBuilder("python", "-m", "neleval", "evaluate", "-g",
                         tacAnnotationsGold.toString(), tacAnnotationsOut.toString())
@@ -160,6 +166,9 @@ public class Main {
                 } finally {
                     process.destroy();
                 }
+                if (annotationsReportPath != null) {
+                    generateReport(posts, annotationsReportPath, Post.DEFAULT_QUALIFIER, "gold");
+                }
             }
 
             // Log completion
@@ -171,13 +180,13 @@ public class Main {
         }
     }
 
-    private static void validateAnnotations(final Path postsPath, final Path annotationsPath)
-            throws IOException {
+    private static void injectAnnotations(final Iterable<Post> posts, final Path annotationsPath,
+            final String qualifier) throws IOException {
 
         // Load posts
-        final Map<Long, Post> posts = Maps.newHashMap();
-        for (final Post post : Post.read(postsPath)) {
-            posts.put(post.getTwitterId(), post);
+        final Map<Long, Post> postsMap = Maps.newHashMap();
+        for (final Post post : posts) {
+            postsMap.put(post.getTwitterId(), post);
         }
 
         // Load and validate annotations
@@ -193,23 +202,23 @@ public class Main {
                 final long twitterId = Long.parseLong(fields[0].trim());
                 final int beginIndex = Integer.parseInt(fields[1].trim());
                 final int endIndex = Integer.parseInt(fields[2].trim());
-                final String uri = fields[3].trim();
+                final String uri = fields[3].startsWith("NIL") ? null : fields[3];
                 final Category category = Category.valueOf(fields[4].trim().toUpperCase());
-                final Post post = posts.get(twitterId);
+                final Post post = postsMap.get(twitterId);
                 if (post == null) {
                     LOGGER.warn("Annotation #{} references unknown tweet {}: {}", lineNum,
                             twitterId, line);
                     continue;
                 }
                 final EntityAnnotation existing = post.getAnnotation(beginIndex,
-                        EntityAnnotation.class, "gold");
+                        EntityAnnotation.class, qualifier);
                 if (existing != null && existing.getBeginIndex() == beginIndex
                         && existing.getEndIndex() == endIndex) {
                     LOGGER.warn("Duplicate annotation #{}: {}", lineNum, line);
                 }
                 try {
                     final EntityAnnotation annotation = post.addAnnotation(EntityAnnotation.class,
-                            beginIndex, endIndex, "gold");
+                            beginIndex, endIndex, qualifier);
                     annotation.setCategory(category);
                     annotation.setUri(uri);
                     if (annotation.getBeginIndex() == annotation.getEndIndex()) {
@@ -221,6 +230,93 @@ public class Main {
             } catch (final Throwable ex) {
                 LOGGER.warn("Could not process annotation #{}: {}", lineNum, line);
             }
+        }
+    }
+
+    private static void generateReport(final Iterable<Post> posts, final Path reportPath,
+            final String systemQualifier, final String goldQualifier) throws IOException {
+
+        final Escaper escaper = HtmlEscapers.htmlEscaper();
+        final StringBuilder body = new StringBuilder();
+
+        for (final Post post : posts) {
+            body.append("<tr>\n<td>\n");
+            body.append("<p class=\"tweet-original\">").append(escaper.escape(post.getText()))
+                    .append("</p>\n");
+            body.append("<p class=\"tweet-rewritten\">")
+                    .append(post.getRewriting().getRewrittenString()).append("</p>\n");
+            body.append("<p class=\"tweet-id\">").append(post.getTwitterId()).append("</p>\n");
+            body.append("</td>\n<td>\n<table class=\"annotations\">\n");
+
+            final List<EntityAnnotation> annotations = Lists.newArrayList();
+            annotations.addAll(post.getAnnotations(EntityAnnotation.class, systemQualifier));
+            annotations.addAll(post.getAnnotations(EntityAnnotation.class, goldQualifier));
+            Collections.sort(annotations);
+
+            final List<EntityAnnotation> systemCol = Lists.newArrayList();
+            final List<EntityAnnotation> goldCol = Lists.newArrayList();
+            for (int i = 0; i < annotations.size();) {
+                final EntityAnnotation a1 = annotations.get(i++);
+                if (i < annotations.size()) {
+                    final EntityAnnotation a2 = annotations.get(i);
+                    if (a2.getBeginIndex() == a1.getBeginIndex()
+                            && a2.getEndIndex() == a1.getEndIndex()) {
+                        if (a1.getQualifier().equals(systemQualifier)) {
+                            systemCol.add(a1);
+                            goldCol.add(a2);
+                        } else {
+                            systemCol.add(a2);
+                            goldCol.add(a1);
+                        }
+                        ++i;
+                    } else if (a1.getQualifier().equals(systemQualifier)) {
+                        systemCol.add(a1);
+                        goldCol.add(null);
+                    } else {
+                        systemCol.add(null);
+                        goldCol.add(a1);
+                    }
+                }
+            }
+
+            for (int i = 0; i < systemCol.size(); ++i) {
+                final EntityAnnotation sa = systemCol.get(i);
+                final EntityAnnotation ga = goldCol.get(i);
+                final String su = sa == null || sa.getUri() == null
+                        || !sa.getUri().startsWith("http://dbpedia.org/resource/") ? null
+                                : sa.getUri();
+                final String gu = ga == null || ga.getUri() == null || ga.getUri().startsWith("NIL")
+                        ? null : ga.getUri();
+                final String c = sa == null || ga == null ? "match-none"
+                        : Objects.equal(sa.getCategory(), ga.getCategory()) && Objects.equal(su, gu)
+                                ? "match-full" : "match-part";
+                body.append("<tr>\n<td class=\"system\">\n");
+                generateReportHelper(body, sa);
+                body.append("</td>\n<td class=\"gold\">\n");
+                generateReportHelper(body, ga);
+                body.append("</td>\n<td class=\"match ").append(c).append("\">\n");
+                body.append("</td>\n</tr>\n");
+            }
+
+            body.append("</table>\n</td>\n</tr>\n");
+        }
+
+        final String template = Resources.toString(Main.class.getResource("Main.html"),
+                Charsets.UTF_8);
+        try (Writer writer = IO.utf8Writer(IO.buffer(IO.write(reportPath.toString())))) {
+            writer.write(template.replace("${body}", body));
+        }
+    }
+
+    private static void generateReportHelper(final StringBuilder body,
+            @Nullable final EntityAnnotation sa) {
+        if (sa != null) {
+            body.append(sa.getText()).append(" (").append(sa.getBeginIndex()).append(",")
+                    .append(sa.getEndIndex()).append(",").append(sa.getCategory()).append(",")
+                    .append(sa.getUri() == null
+                            || !sa.getUri().startsWith("http//dbpedia.org/resource/") ? "NIL"
+                                    : sa.getUri().replaceAll("http://dbpedia.org/resource/", ""))
+                    .append(")\n");
         }
     }
 
