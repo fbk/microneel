@@ -39,7 +39,7 @@
 			"type": "eu.fbk.microneel.enrich.TagdefEnricher",
 			"lang": ""
 		}, {
-			"type": "eu.fbk.microneel.enrich.AlignmentEnricher",
+			"type": "eu.fbk.microneel.enrich.SmtEnricher",
 			"endpoint": "https://api.futuro.media/smt/alignments"
 		}, {
 			"type": "eu.fbk.microneel.enrich.UrlEnricher"		
@@ -54,9 +54,15 @@
 		} ]
 	},
 	"linker": {
-		"type": "eu.fbk.microneel.link.TintLinker"
+		"type": "sequence",
+		"annotators": [ {
+			"type": "eu.fbk.microneel.link.SmtLinker"
+		}, {
+			"type": "eu.fbk.microneel.link.TintLinker"
+		} ]
 	},
 	"merger": {
-		"type": "eu.fbk.microneel.merge.SimpleMerger"
+		"type": "eu.fbk.microneel.merge.SimpleMerger",
+		"q": [ "smt", "ml", "stanford" ]
 	}
 }

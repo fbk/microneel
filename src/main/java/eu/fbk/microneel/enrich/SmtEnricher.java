@@ -25,17 +25,17 @@ import eu.fbk.microneel.Category;
 import eu.fbk.microneel.Post;
 import eu.fbk.microneel.Post.MentionAnnotation;
 
-public final class AlignmentEnricher implements Annotator {
+public final class SmtEnricher implements Annotator {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(AlignmentEnricher.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(SmtEnricher.class);
 
     private final String endpoint;
 
-    public AlignmentEnricher(final JsonObject json) {
+    public SmtEnricher(final JsonObject json) {
         this(json.has("endpoint") ? json.get("endpoint").getAsString() : null);
     }
 
-    public AlignmentEnricher(@Nullable final String endpoint) {
+    public SmtEnricher(@Nullable final String endpoint) {
         this.endpoint = endpoint == null ? "https://api.futuro.media/smt/alignments"
                 : endpoint.endsWith("/") ? endpoint.substring(0, endpoint.length() - 1) : endpoint;
     }
