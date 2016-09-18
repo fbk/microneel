@@ -1,16 +1,9 @@
 package eu.fbk.microneel.util;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
+import java.io.*;
 import java.util.*;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Throwables;
 import com.google.common.primitives.Ints;
 
 import org.apache.commons.cli.*;
@@ -123,15 +116,62 @@ public class PersonOrgClassifier {
         return false;
     }
 
-    public void extractFeatures(File dataset, File output) throws IOException {
+    private static String sanitize(String value) {
+        if (value == null || value.equals("Null")) {
+            return null;
+        }
+        return value;
+    }
+
+    private static void fillDict(String value, ArrayList<String> dict) {
+        if (value == null) {
+            return;
+        }
+        int pos = dict.indexOf(value);
+        if (pos == -1) {
+            dict.add(value);
+        }
+    }
+
+    private void fillDictionary(CSVParser parser) {
+        boolean warningShown = false;
+        for (CSVRecord record : parser) {
+            if (record.size() <= 6) {
+                if (!warningShown) {
+                    logger.warn("Additional features will not be added: dataset is corrupted or doesn't contain full feature set");
+                    warningShown = true;
+                }
+                continue;
+            }
+            fillDict(sanitize(record.get(4)), langDictionary);
+            fillDict(sanitize(record.get(6)), uriCategoryDictionary);
+        }
+        numUniqueFeatures = numSetRelatedFeatures + langDictionary.size() + uriCategoryDictionary.size();
+        numFeatures = numUniqueFeatures + (numUniqueFeatures * (numUniqueFeatures - 1)) / 2;
+    }
+
+    private CSVParser open(File dataset) throws IOException {
         CSVParser parser = new CSVParser(new FileReader(dataset), CSVFormat.DEFAULT.withDelimiter('\t'));
+        if (parser.iterator().hasNext()) {
+            parser.iterator().next();
+        }
+        return parser;
+    }
+
+    public void extractFeatures(File dataset, File output) throws IOException {
+        logger.info("Filling feature dictionary");
+        CSVParser parser = open(dataset);
+        fillDictionary(parser);
+        parser.close();
+        parser = open(dataset);
+        logger.info("Extracting features");
+
         FileWriter svmOutput = new FileWriter(output);
 
         boolean arff = output.getName().endsWith(".arff");
         
         if (arff) {
             svmOutput.write("@RELATION mentiontype\n\n");
-            int numFeatures = UNIQUE_FEATURES + (UNIQUE_FEATURES * (UNIQUE_FEATURES - 1)) / 2;
             for (int i = 0; i < numFeatures; ++ i) {
                 svmOutput.write("@ATTRIBUTE attr" + i + " NUMERIC\n");
             }
@@ -141,7 +181,17 @@ public class PersonOrgClassifier {
         boolean first = true;
         for (CSVRecord record : parser) {
             int label = getLabel(record.get(1));
-            int[] features = getFeatures(record.get(0));
+            String fullName = null, description = null, lang = null, uri = null, uriCategory = null;
+            if (record.size() > 6) {
+                fullName = sanitize(record.get(2));
+                description = sanitize(record.get(3));
+                lang = sanitize(record.get(4));
+                uri = sanitize(record.get(5));
+                uriCategory = sanitize(record.get(6));
+            } else {
+                logger.info("Record with reduced feature set: "+record.get(0));
+            }
+            int[] features = getFeatures(record.get(0), fullName, description, lang, uri, uriCategory);
 
             if (first) {
                 first = false;
@@ -156,6 +206,9 @@ public class PersonOrgClassifier {
             } else {
                 svmOutput.write(String.valueOf(label));
                 for (int i = 0; i < features.length; i++) {
+                    if (features[i] == 0) {
+                        continue;
+                    }
                     svmOutput.write(" "+(i+1)+":"+features[i]);
                 }
             }
@@ -164,32 +217,60 @@ public class PersonOrgClassifier {
         svmOutput.close();
     }
 
-    private static final int UNIQUE_FEATURES = 8;
-    private int[] getFeatures(String username) {
-        int[] features = new int[UNIQUE_FEATURES + (UNIQUE_FEATURES * (UNIQUE_FEATURES - 1)) / 2];
+    private final int numSetRelatedFeatures = sets.size()*2 + 1; //Sets twice + if uri exists in a dictionary
+    private final ArrayList<String> uriCategoryDictionary = new ArrayList<>();
+    private final ArrayList<String> langDictionary = new ArrayList<>();
+    private int numUniqueFeatures = 0;
+    private int numFeatures = 0;
+    private int[] getFeatures(
+            String username,
+            String fullName,
+            String description,
+            String lang,
+            String uri,
+            String uriCategory) {
+
+        //Preprocessing
+        int langPos = langDictionary.indexOf(lang);
+        int uriCategoryPos = uriCategoryDictionary.indexOf(uriCategory);
+        int uriExists = uri == null ? 0 : 1;
+
+        //Feature array initialization
+        int[] features = new int[numFeatures];
         Arrays.fill(features, 0);
         Collection<String> parts = breakUsername(username);
+
+        //Log reporting
         double random = new Random().nextDouble();
         if (random < 0.4) {
-            logger.info("Username: "+username+". Parts: "+String.join(", ", parts));
+            logger.info("Username: "+username+", name: "+(fullName == null ? "" : fullName));
+            logger.info("  Username parts: "+String.join(", ", parts));
+            logger.info("  Name parts: "+String.join(", ", parts));
         }
 
+        //Filling array of features
+        int featureId = 0;
         for (String part : parts) {
-            if (firstNames.containsKey(part)) {
-                features[0] = 1;
-            }
-            if (lastNames.containsKey(part)) {
-                features[1] = 1;
-            }
-            if (firstNamesExpanded.containsKey(part)) {
-                features[2] = 1;
-            }
-            if (lastNamesExpanded.containsKey(part)) {
-                features[3] = 1;
+            int setId = 0;
+            for (HashMap<String, Integer> set : sets.values()) {
+                if (set.containsKey(part)) {
+                    features[featureId+setId] = 1;
+                }
+                setId++;
             }
         }
+        featureId += sets.size();
+        features[featureId] = uriExists;
+        featureId++;
+        if (langPos != -1) {
+            features[featureId + langPos] = 1;
+        }
+        featureId += langDictionary.size();
+        if (uriCategoryPos != -1) {
+            features[featureId + uriCategoryPos] = 1;
+        }
+        featureId += uriCategoryDictionary.size();
 
-        int featureId = 4;
         for (Map.Entry<String, HashMap<String, Integer>> set : sets.entrySet()) {
             for (String name : set.getValue().keySet()) {
                 if (username.toLowerCase().contains(name)) {
@@ -202,9 +283,10 @@ public class PersonOrgClassifier {
             featureId++;
         }
 
-        int idx = UNIQUE_FEATURES;
-        for (int i = 0; i < UNIQUE_FEATURES; i++) {
-            for (int j = i+1; j < UNIQUE_FEATURES; j++) {
+        //Combinations of features
+        int idx = numUniqueFeatures;
+        for (int i = 0; i < numUniqueFeatures; i++) {
+            for (int j = i+1; j < numUniqueFeatures; j++) {
                 features[idx] = features[i] * features[j];
                 idx++;
             }
@@ -275,7 +357,7 @@ public class PersonOrgClassifier {
         String[] input;
         String dataset;
         String output;
-        int freqThreshold = 150;
+        int freqThreshold = 40;
     }
 
     private static TrainConfiguration loadTrainConfig(String[] args) {
@@ -327,24 +409,5 @@ public class PersonOrgClassifier {
             "\n",
             true
         );
-    }
-
-    private static Object call(final Object object, final String methodName, final Object... args) {
-        final boolean isStatic = object instanceof Class<?>;
-        final Class<?> clazz = isStatic ? (Class<?>) object : object.getClass();
-        for (final Method method : clazz.getMethods()) {
-            if (method.getName().equals(methodName)
-                    && isStatic == Modifier.isStatic(method.getModifiers())
-                    && method.getParameterTypes().length == args.length) {
-                try {
-                    return method.invoke(isStatic ? null : object, args);
-                } catch (final InvocationTargetException ex) {
-                    Throwables.propagate(ex.getCause());
-                } catch (final IllegalAccessException ex) {
-                    throw new IllegalArgumentException("Cannot invoke " + method, ex);
-                }
-            }
-        }
-        throw new IllegalArgumentException("Cannot invoke " + methodName);
     }
 }
