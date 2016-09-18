@@ -239,7 +239,7 @@ public class Main {
         final Escaper escaper = HtmlEscapers.htmlEscaper();
         final StringBuilder body = new StringBuilder();
 
-        for (final Post post : posts) {
+        for (final Post post : Ordering.natural().sortedCopy(posts)) {
             body.append("<tr>\n<td>\n");
             body.append("<p class=\"tweet-original\">").append(escaper.escape(post.getText()))
                     .append("</p>\n");
@@ -269,13 +269,15 @@ public class Main {
                             goldCol.add(a1);
                         }
                         ++i;
-                    } else if (a1.getQualifier().equals(systemQualifier)) {
-                        systemCol.add(a1);
-                        goldCol.add(null);
-                    } else {
-                        systemCol.add(null);
-                        goldCol.add(a1);
+                        continue;
                     }
+                }
+                if (a1.getQualifier().equals(systemQualifier)) {
+                    systemCol.add(a1);
+                    goldCol.add(null);
+                } else {
+                    systemCol.add(null);
+                    goldCol.add(a1);
                 }
             }
 
@@ -285,8 +287,9 @@ public class Main {
                 final String su = sa == null || sa.getUri() == null
                         || !sa.getUri().startsWith("http://dbpedia.org/resource/") ? null
                                 : sa.getUri();
-                final String gu = ga == null || ga.getUri() == null || ga.getUri().startsWith("NIL")
-                        ? null : ga.getUri();
+                final String gu = ga == null || ga.getUri() == null
+                        || !ga.getUri().startsWith("http://dbpedia.org/resource/") ? null
+                                : ga.getUri();
                 final String c = sa == null || ga == null ? "match-none"
                         : Objects.equal(sa.getCategory(), ga.getCategory()) && Objects.equal(su, gu)
                                 ? "match-full" : "match-part";
@@ -312,9 +315,10 @@ public class Main {
             @Nullable final EntityAnnotation sa) {
         if (sa != null) {
             body.append(sa.getText()).append(" (").append(sa.getBeginIndex()).append(",")
-                    .append(sa.getEndIndex()).append(",").append(sa.getCategory()).append(",")
+                    .append(sa.getEndIndex()).append(",")
+                    .append(sa.getCategory().toString().toLowerCase()).append(",")
                     .append(sa.getUri() == null
-                            || !sa.getUri().startsWith("http//dbpedia.org/resource/") ? "NIL"
+                            || !sa.getUri().startsWith("http://dbpedia.org/resource/") ? "NIL"
                                     : sa.getUri().replaceAll("http://dbpedia.org/resource/", ""))
                     .append(")\n");
         }

@@ -52,6 +52,8 @@
 			"type": "eu.fbk.microneel.rewrite.AnnotationRewriter"
 		}, {
 			"type": "eu.fbk.microneel.rewrite.SlangRewriter"
+		}, {
+			"type": "eu.fbk.microneel.rewrite.CleaningRewriter"
 		} ]
 	},
 	"linker": {
@@ -64,6 +66,6 @@
 	},
 	"merger": {
 		"type": "eu.fbk.microneel.merge.ClassificationMerger",
-		"q": [ "smt", "ml", "stanford" ]
+		"q": [ "ml", "stanford", "smt" ]
 	}
 }
