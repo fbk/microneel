@@ -6,6 +6,7 @@ import java.util.*;
 import com.google.common.base.Joiner;
 import com.google.common.primitives.Ints;
 
+import com.google.gson.Gson;
 import org.apache.commons.cli.*;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -133,6 +134,16 @@ public class PersonOrgClassifier {
         }
     }
 
+    private static void fillDictFromJson(String file, ArrayList<String> dict) throws IOException {
+        Gson gson = new Gson();
+        FileReader reader = new FileReader(new File(file));
+        String[] values = gson.fromJson(reader, String[].class);
+        reader.close();
+        for (String value : values) {
+            dict.add(value);
+        }
+    }
+
     private void fillDictionary(CSVParser parser) {
         boolean warningShown = false;
         for (CSVRecord record : parser) {
@@ -146,6 +157,28 @@ public class PersonOrgClassifier {
             fillDict(sanitize(record.get(4)), langDictionary);
             fillDict(sanitize(record.get(6)), uriCategoryDictionary);
         }
+        recalculateFeaturesNum();
+    }
+
+    private void fillDictionaryFromJson(String filePrefix) throws IOException {
+        fillDictFromJson(filePrefix+".lang.json", langDictionary);
+        fillDictFromJson(filePrefix+".uri.cat.json", uriCategoryDictionary);
+        recalculateFeaturesNum();
+    }
+
+    private void dumpDictionariesToJson(String filePrefix) throws IOException {
+        dumpDictionaryToJson(filePrefix+".lang.json", langDictionary);
+        dumpDictionaryToJson(filePrefix+".uri.cat.json", uriCategoryDictionary);
+    }
+
+    private void dumpDictionaryToJson(String filename, ArrayList<String> dict) throws IOException {
+        Gson gson = new Gson();
+        FileWriter writer = new FileWriter(new File(filename));
+        gson.toJson(dict.toArray(new String[0]), writer);
+        writer.close();
+    }
+
+    private void recalculateFeaturesNum() {
         numUniqueFeatures = numSetRelatedFeatures + langDictionary.size() + uriCategoryDictionary.size();
         numFeatures = numUniqueFeatures + (numUniqueFeatures * (numUniqueFeatures - 1)) / 2;
     }
@@ -158,11 +191,18 @@ public class PersonOrgClassifier {
         return parser;
     }
 
-    public void extractFeatures(File dataset, File output) throws IOException {
+    public void extractFeatures(File dataset, File output, boolean test) throws IOException {
+        CSVParser parser;
         logger.info("Filling feature dictionary");
-        CSVParser parser = open(dataset);
-        fillDictionary(parser);
-        parser.close();
+        if (!test) {
+            parser = open(dataset);
+            fillDictionary(parser);
+            parser.close();
+            logger.info("Dumping dictionaries");
+            dumpDictionariesToJson(dataset.getPath());
+        } else {
+            fillDictionaryFromJson(dataset.getPath());
+        }
         parser = open(dataset);
         logger.info("Extracting features");
 
@@ -350,7 +390,7 @@ public class PersonOrgClassifier {
             parser.close();
         }
         script.cutWithThreshold(config.freqThreshold);
-        script.extractFeatures(new File(config.dataset), new File(config.output));
+        script.extractFeatures(new File(config.dataset), new File(config.output), config.test);
     }
 
     private static class TrainConfiguration {
@@ -358,6 +398,7 @@ public class PersonOrgClassifier {
         String dataset;
         String output;
         int freqThreshold = 40;
+        boolean test = false;
     }
 
     private static TrainConfiguration loadTrainConfig(String[] args) {
@@ -374,6 +415,10 @@ public class PersonOrgClassifier {
             Option.builder("t").desc("Frequency threshold for names")
                 .hasArg().argName("frequency").longOpt("threshold").build()
         );
+        options.addOption(
+            Option.builder().desc("Treat input as a test set (requires files from training phase to be present)")
+                .longOpt("test").build()
+        );
 
         CommandLineParser parser = new DefaultParser();
         CommandLine line;
@@ -389,6 +434,7 @@ public class PersonOrgClassifier {
                 configuration.freqThreshold = Integer.valueOf(line.getOptionValue("threshold"));
             }
             configuration.input = line.getArgs();
+            configuration.test = line.hasOption("test");
             return configuration;
         } catch (ParseException exp) {
             // oops, something went wrong
