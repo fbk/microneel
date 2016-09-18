@@ -1,6 +1,6 @@
 package eu.fbk.microneel.merge;
 
-import com.google.common.collect.HashMultimap;
+/*import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Iterables;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -17,11 +17,11 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.*;*/
 
-public class ClassificationMerger implements Annotator {
+public class ClassificationMerger {
 
-    private static int split = 5;
+    /*private static int split = 5;
     private static final Logger LOGGER = LoggerFactory.getLogger(ClassificationMerger.class);
 
     static Map<Category, Integer> outcome = new HashMap<>();
@@ -217,5 +217,5 @@ public class ClassificationMerger implements Annotator {
     public String toString() {
         return getClass().getSimpleName();
     }
-
+*/
 }

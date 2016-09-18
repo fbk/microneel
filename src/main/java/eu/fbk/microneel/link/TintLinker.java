@@ -1,6 +1,6 @@
 package eu.fbk.microneel.link;
 
-import com.google.gson.JsonObject;
+/*import com.google.gson.JsonObject;
 import edu.stanford.nlp.ling.CoreAnnotations;
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.pipeline.Annotation;
@@ -20,15 +20,15 @@ import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.InputStream;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.*;*/
 
 /**
  * Created by alessio on 14/09/16.
  */
 
-public class TintLinker implements Annotator {
+public class TintLinker {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(TintLinker.class);
+   /* private static final Logger LOGGER = LoggerFactory.getLogger(TintLinker.class);
     private static String destinationLang = "en";
     private static String destinationPattern = "http://dbpedia.org/resource/%s";
 
@@ -337,5 +337,5 @@ public class TintLinker implements Annotator {
                         originalBegin, originalEnd, post.getRewriting());
             }
         }
-    }
+    }*/
 }

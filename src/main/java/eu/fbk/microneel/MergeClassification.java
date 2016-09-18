@@ -1,6 +1,6 @@
 package eu.fbk.microneel;
 
-import com.google.common.collect.HashMultimap;
+/*import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
 import eu.fbk.utils.eval.ConfusionMatrix;
 import eu.fbk.utils.svm.Classifier;
@@ -13,7 +13,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.*;*/
 
 /**
  * Created by alessio on 17/09/16.
@@ -21,7 +21,7 @@ import java.util.*;
 
 public class MergeClassification {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(MergeClassification.class);
+    /*private static final Logger LOGGER = LoggerFactory.getLogger(MergeClassification.class);
 
     public static void main(String[] args) {
 
@@ -125,5 +125,5 @@ public class MergeClassification {
             e.printStackTrace();
         }
 
-    }
+    }*/
 }
