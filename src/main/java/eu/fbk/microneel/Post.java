@@ -44,13 +44,13 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
     private static final Logger LOGGER = LoggerFactory.getLogger(Post.class);
 
     private static final Pattern MENTION_PATTERN = Pattern
-            .compile("(^|[^A-Za-z0-9_])@([A-Za-z][A-Za-z0-9_]+)($|[^A-Za-z0-9_])");
+            .compile("(^|[^A-Za-z0-9_])@([A-Za-z0-9_]+)($|[^A-Za-z0-9_])");
 
     private static final Pattern HASHTAG_PATTERN = Pattern.compile(
             "(^|[^0-9_\\p{IsAlphabetic}])#([0-9]*[A-Za-z][0-9_\\p{IsAlphabetic}]+)($|[^0-9_\\p{IsAlphabetic}])");
 
     private static final Pattern URL_PATTERN = Pattern
-            .compile("(^|[^A-Za-z0-9_])(http|https)://t.co/([A-Za-z0-9_]+)($|[^A-Za-z0-9_])");
+            .compile("(^|[^A-Za-z0-9_])(http|https)://t.co/([A-Za-z0-9_]{8})");
 
     private static final long serialVersionUID = 1L;
 
