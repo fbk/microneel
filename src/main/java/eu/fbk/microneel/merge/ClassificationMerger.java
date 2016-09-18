@@ -4,6 +4,10 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Iterables;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import edu.stanford.nlp.ling.CoreAnnotations;
+import edu.stanford.nlp.ling.CoreLabel;
+import edu.stanford.nlp.pipeline.Annotation;
+import eu.fbk.dh.tint.runner.TintPipeline;
 import eu.fbk.microneel.Annotator;
 import eu.fbk.microneel.Category;
 import eu.fbk.microneel.Post;
@@ -15,7 +19,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.FileInputStream;
 import java.io.FileReader;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.*;
 
@@ -24,8 +30,10 @@ public class ClassificationMerger implements Annotator {
     private static int split = 5;
     private static final Logger LOGGER = LoggerFactory.getLogger(ClassificationMerger.class);
 
-    static Map<Category, Integer> outcome = new HashMap<>();
-    static Map<Integer, Category> classificationCategories = new HashMap<>();
+    private static Map<Category, Integer> outcome = new HashMap<>();
+    private static Map<Integer, Category> classificationCategories = new HashMap<>();
+    private Map<String, FrequencyHashSet<String>> tokens = new HashMap<>();
+    private TintPipeline pipeline;
 
     static {
         outcome.put(Category.PERSON, 1);
@@ -41,6 +49,9 @@ public class ClassificationMerger implements Annotator {
     Map<String, Map<Integer, String>> gold = new HashMap<>();
 
     public ClassificationMerger(final JsonObject json, Path configDir) {
+        BufferedReader reader;
+        String line;
+
         if (!json.has("q")) {
             this.qualifiers = new String[] {};
         } else {
@@ -57,9 +68,24 @@ public class ClassificationMerger implements Annotator {
 
         Path goldFile = configDir.resolve("training.annotations.tsv");
 
-        BufferedReader reader;
-        String line;
+        Map<String, Path> files = new HashMap<>();
+        files.put("loc", configDir.resolve("data/ner/it-LOC-tokens.txt"));
+        files.put("per", configDir.resolve("data/ner/it-PER-tokens.txt"));
+        files.put("org", configDir.resolve("data/ner/it-ORG-tokens.txt"));
+
         try {
+            Path propFile = configDir.resolve("tint.properties");
+            InputStream configStream = new FileInputStream(propFile.toFile());
+            Properties properties = new Properties();
+            properties.load(configStream);
+            properties.setProperty("annotators", "ita_toksent");
+
+            pipeline = new TintPipeline();
+            pipeline.loadDefaultProperties();
+            pipeline.addProperties(properties);
+            pipeline.load();
+
+            LOGGER.info("Loading gold file");
             reader = new BufferedReader(new FileReader(goldFile.toFile()));
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
@@ -71,12 +97,37 @@ public class ClassificationMerger implements Annotator {
                 gold.putIfAbsent(neelID, new HashMap<>());
                 String type = parts[4];
                 gold.get(neelID).put(Integer.parseInt(parts[1]), type);
-//            totalGold++;
             }
             reader.close();
+
+            for (String key : files.keySet()) {
+                LOGGER.info("Loading {} file", key.toUpperCase());
+                Path thisFile = files.get(key);
+                tokens.put(key, new FrequencyHashSet<>());
+                reader = new BufferedReader(new FileReader(thisFile.toFile()));
+                while ((line = reader.readLine()) != null) {
+                    line = line.trim();
+                    if (line.length() == 0) {
+                        continue;
+                    }
+                    String[] parts = line.split("\\s+");
+                    for (int i = 1; i < parts.length; i++) {
+                        String part = parts[i];
+                        if (!Character.isUpperCase(part.charAt(0))) {
+                            continue;
+                        }
+                        if (part.length() <= 2) {
+                            continue;
+                        }
+                        tokens.get(key).add(part);
+                    }
+                }
+                reader.close();
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
+
     }
 
     public ClassificationMerger(final String... qualifiers) {
@@ -152,13 +203,18 @@ public class ClassificationMerger implements Annotator {
                 final eu.fbk.utils.svm.Vector.Builder builder = eu.fbk.utils.svm.Vector.builder();
                 builder.set(features.get(offset));
 
+                // Predict end (rule-based)
                 int end = -1;
                 FrequencyHashSet<String> urls = new FrequencyHashSet<>();
                 for (String qualifier : qualifiers) {
                     Post.EntityAnnotation annotation = testPost
                             .getAnnotation(offset, Post.EntityAnnotation.class, qualifier);
                     if (annotation != null) {
-                        end = Math.max(end, annotation.getEndIndex());
+                        if (end == -1) {
+                            end = annotation.getEndIndex();
+                        } else {
+                            end = Math.min(end, annotation.getEndIndex());
+                        }
                         String uri = annotation.getUri();
                         if (uri != null) {
                             urls.add(uri);
@@ -166,9 +222,11 @@ public class ClassificationMerger implements Annotator {
                     }
                 }
 
+                // Predict type (SVM)
                 eu.fbk.utils.svm.Vector vector = builder.build();
                 LabelledVector predict = classifier.predict(false, vector);
 
+                // Predict label (rule-based)
                 try {
                     if (predict.getLabel() != 0) {
                         final Post.EntityAnnotation ta = testPost
@@ -191,10 +249,26 @@ public class ClassificationMerger implements Annotator {
     private HashMultimap<Integer, String> extractFeatures(Post post) {
         HashMultimap<Integer, String> features = HashMultimap.create();
 
+        // Mentions
         Set<Integer> mentionBeginIndexes = new HashSet<>();
+        Set<Integer> mentionAllIndexes = new HashSet<>();
         List<Post.MentionAnnotation> mentionAnnotations = post.getAnnotations(Post.MentionAnnotation.class);
         for (Post.MentionAnnotation mentionAnnotation : mentionAnnotations) {
             mentionBeginIndexes.add(mentionAnnotation.getBeginIndex() + 1);
+            for (int i = mentionAnnotation.getBeginIndex() + 1; i < mentionAnnotation.getEndIndex(); i++) {
+                mentionAllIndexes.add(i);
+            }
+        }
+
+        // Hashtags
+        Set<Integer> hashtagBeginIndexes = new HashSet<>();
+        Set<Integer> hashtagAllIndexes = new HashSet<>();
+        List<Post.HashtagAnnotation> hashtagAnnotations = post.getAnnotations(Post.HashtagAnnotation.class);
+        for (Post.HashtagAnnotation hashtagAnnotation : hashtagAnnotations) {
+            hashtagBeginIndexes.add(hashtagAnnotation.getBeginIndex() + 1);
+            for (int i = hashtagAnnotation.getBeginIndex() + 1; i < hashtagAnnotation.getEndIndex(); i++) {
+                hashtagAllIndexes.add(i);
+            }
         }
 
         for (String qualifier : qualifiers) {
@@ -203,9 +277,36 @@ public class ClassificationMerger implements Annotator {
             for (Post.EntityAnnotation annotation : annotations) {
                 Category category = annotation.getCategory();
                 int beginIndex = annotation.getBeginIndex();
+
+                String text = annotation.getSurfaceForm();
+                Annotation tintAnnotation = pipeline.runRaw(text);
+                for (CoreLabel token : tintAnnotation.get(CoreAnnotations.TokensAnnotation.class)) {
+                    String tokenText = token.originalText();
+                    for (String key : tokens.keySet()) {
+                        if (tokens.get(key).get(tokenText) != null) {
+                            features.put(beginIndex, "contains_NER_" + key.toUpperCase());
+                        }
+                    }
+
+                }
+
                 features.put(beginIndex, category + "_" + qualifier);
+
+                if (Character.isUpperCase(annotation.getSurfaceForm().charAt(0))) {
+                    features.put(beginIndex, "uppercase");
+                }
+
                 if (mentionBeginIndexes.contains(beginIndex)) {
                     features.put(beginIndex, "isMention");
+                }
+                if (mentionAllIndexes.contains(beginIndex)) {
+                    features.put(beginIndex, "isInMention");
+                }
+                if (hashtagBeginIndexes.contains(beginIndex)) {
+                    features.put(beginIndex, "isHashtag");
+                }
+                if (hashtagAllIndexes.contains(beginIndex)) {
+                    features.put(beginIndex, "isInHashtag");
                 }
             }
         }
