@@ -4,6 +4,7 @@ import java.io.*;
 import java.util.*;
 
 import com.google.common.base.Joiner;
+import com.google.common.primitives.Doubles;
 import com.google.common.primitives.Ints;
 
 import com.google.gson.Gson;
@@ -31,6 +32,7 @@ public class PersonOrgClassifier {
         this.put("first expanded", firstNamesExpanded);
         this.put("last expanded", lastNamesExpanded);
     }};
+    private final HashMap<HashMap<String, Integer>, Integer> maxFrequencies = new HashMap<>();
 
     public void addNames(CSVRecord record) {
         addFirstName(record.get(1));
@@ -47,13 +49,18 @@ public class PersonOrgClassifier {
     public void cutWithThreshold(int threshold, HashMap<String, Integer> map) {
         logger.info("  Before filtering: "+map.size());
         Iterator<Map.Entry<String, Integer>> entries = map.entrySet().iterator();
+        int max = 0;
         while (entries.hasNext()) {
             Map.Entry<String, Integer> entry = entries.next();
+            if (max < entry.getValue()) {
+                max = entry.getValue();
+            }
             if (entry.getValue() < threshold) {
                 entries.remove();
             }
         }
         logger.info("  After filtering: "+map.size());
+        maxFrequencies.put(map, max);
     }
 
     public void addFirstName(String name) {
@@ -231,7 +238,7 @@ public class PersonOrgClassifier {
             } else {
                 logger.info("Record with reduced feature set: "+record.get(0));
             }
-            int[] features = getFeatures(record.get(0), fullName, description, lang, uri, uriCategory);
+            double[] features = getFeatures(record.get(0), fullName, description, lang, uri, uriCategory);
 
             if (first) {
                 first = false;
@@ -240,7 +247,7 @@ public class PersonOrgClassifier {
             }
         
             if (arff) {
-                svmOutput.write(Joiner.on(',').join(Ints.asList(features)));
+                svmOutput.write(Joiner.on(',').join(Doubles.asList(features)));
                 svmOutput.write(",");
                 svmOutput.write(label == 0 ? "Null" : label == 1 ? "Person" : "Organization");
             } else {
@@ -262,7 +269,7 @@ public class PersonOrgClassifier {
     private final ArrayList<String> langDictionary = new ArrayList<>();
     private int numUniqueFeatures = 0;
     private int numFeatures = 0;
-    private int[] getFeatures(
+    private double[] getFeatures(
             String username,
             String fullName,
             String description,
@@ -276,7 +283,7 @@ public class PersonOrgClassifier {
         int uriExists = uri == null ? 0 : 1;
 
         //Feature array initialization
-        int[] features = new int[numFeatures];
+        double[] features = new double[numFeatures];
         Arrays.fill(features, 0);
         Collection<String> parts = breakUsername(username);
 
@@ -293,8 +300,15 @@ public class PersonOrgClassifier {
         for (String part : parts) {
             int setId = 0;
             for (HashMap<String, Integer> set : sets.values()) {
+                int max = maxFrequencies.getOrDefault(set, 0);
                 if (set.containsKey(part)) {
-                    features[featureId+setId] = 1;
+                    if (max == 0) {
+                        max = 1;
+                    }
+                    double score = (double) set.get(part)/max;
+                    if (features[featureId+setId] < score) {
+                        features[featureId+setId] = score;
+                    }
                 }
                 setId++;
             }
@@ -312,12 +326,16 @@ public class PersonOrgClassifier {
         featureId += uriCategoryDictionary.size();
 
         for (Map.Entry<String, HashMap<String, Integer>> set : sets.entrySet()) {
+            int max = maxFrequencies.getOrDefault(set.getValue(), 0);
             for (String name : set.getValue().keySet()) {
                 if (username.toLowerCase().contains(name)) {
                     if (random < 0.4) {
                         logger.info("  Matched["+set.getKey()+", freq: "+set.getValue().get(name)+"]: " + name);
                     }
-                    features[featureId] = 1;
+                    double score = (double) set.getValue().get(name)/max;
+                    if (features[featureId] < score) {
+                        features[featureId] = score;
+                    }
                 }
             }
             featureId++;
