@@ -109,9 +109,9 @@ public class SmtSupervisedLinker implements Annotator {
         }
 //        }
         for (final Map.Entry<String, Map<String, Integer>> set : this.sets.entrySet()) {
-            LOGGER.info("Filtering nameset: " + set.getKey());
+            LOGGER.debug("Filtering nameset: " + set.getKey());
             final Map<String, Integer> map = set.getValue();
-            LOGGER.info("  Before filtering: " + map.size());
+            LOGGER.debug("  Before filtering: " + map.size());
             final Iterator<Map.Entry<String, Integer>> entries = map.entrySet().iterator();
             int max = 0;
             while (entries.hasNext()) {
@@ -123,7 +123,7 @@ public class SmtSupervisedLinker implements Annotator {
                     entries.remove();
                 }
             }
-            LOGGER.info("  After filtering: " + map.size());
+            LOGGER.debug("  After filtering: " + map.size());
             this.maxFrequencies.put(map, max);
         }
 
