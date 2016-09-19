@@ -64,7 +64,7 @@
 			"type": "eu.fbk.microneel.link.SmtSupervisedLinker",
 			"cross": 5
 		}, {
-			"type": "eu.fbk.microneel.link.SmtSupervisedLinker"
+			"type": "eu.fbk.microneel.link.TintLinker"
 		} ]
 	},
 	"merger": {

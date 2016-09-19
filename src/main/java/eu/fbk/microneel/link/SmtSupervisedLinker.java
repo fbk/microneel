@@ -109,9 +109,9 @@ public class SmtSupervisedLinker implements Annotator {
         }
 //        }
         for (final Map.Entry<String, Map<String, Integer>> set : this.sets.entrySet()) {
-            LOGGER.info("Filtering nameset: " + set.getKey());
+            LOGGER.debug("Filtering nameset: " + set.getKey());
             final Map<String, Integer> map = set.getValue();
-            LOGGER.info("  Before filtering: " + map.size());
+            LOGGER.debug("  Before filtering: " + map.size());
             final Iterator<Map.Entry<String, Integer>> entries = map.entrySet().iterator();
             int max = 0;
             while (entries.hasNext()) {
@@ -123,7 +123,7 @@ public class SmtSupervisedLinker implements Annotator {
                     entries.remove();
                 }
             }
-            LOGGER.info("  After filtering: " + map.size());
+            LOGGER.debug("  After filtering: " + map.size());
             this.maxFrequencies.put(map, max);
         }
 
@@ -391,10 +391,10 @@ public class SmtSupervisedLinker implements Annotator {
         // Log reporting
         final double random = new Random().nextDouble();
         if (random < 0.4) {
-            LOGGER.info("Username: " + username + ", name: "
+            LOGGER.debug("Username: " + username + ", name: "
                     + (annotation.getFullName() == null ? "" : annotation.getFullName()));
-            LOGGER.info("  Username parts: " + String.join(", ", parts));
-            LOGGER.info("  Name parts: " + String.join(", ", parts));
+            LOGGER.debug("  Username parts: " + String.join(", ", parts));
+            LOGGER.debug("  Name parts: " + String.join(", ", parts));
         }
 
         // Filling array of features
@@ -418,7 +418,7 @@ public class SmtSupervisedLinker implements Annotator {
             for (final String name : entry.getValue().keySet()) {
                 if (username.toLowerCase().contains(name)) {
                     if (random < 0.4) {
-                        LOGGER.info("  Matched[" + entry.getKey() + ", freq: "
+                        LOGGER.debug("  Matched[" + entry.getKey() + ", freq: "
                                 + entry.getValue().get(name) + "]: " + name);
                     }
                     features.add("contains_" + setId);
