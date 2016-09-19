@@ -69,7 +69,7 @@ public class ClassificationMerger implements Annotator {
         String line;
 
         parameters = Classifier.Parameters
-                .forSVMPolyKernel(outcome.size() + 1, null, null, null, null, null);
+                .forSVMPolyKernel(outcome.size() + 1, new float[]{.25f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f}, null, null, null, null);
 
         if (json.has("train")) {
             doTrain = json.get("train").getAsBoolean();
@@ -388,6 +388,13 @@ public class ClassificationMerger implements Annotator {
 
                 if (Character.isUpperCase(annotation.getSurfaceForm().charAt(0))) {
                     features.put(beginIndex, "uppercase");
+                }
+                
+                if (annotation.getSurfaceForm().toLowerCase().equals(annotation.getSurfaceForm())) {
+                    features.put(beginIndex, "isAllLowercase");
+                }
+                if (annotation.getSurfaceForm().toUpperCase().equals(annotation.getSurfaceForm())) {
+                    features.put(beginIndex, "isAllUppercase");
                 }
 
                 if (mentionBeginIndexes.contains(beginIndex)) {
