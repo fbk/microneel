@@ -216,7 +216,7 @@ public class PersonOrgClassifier {
         FileWriter svmOutput = new FileWriter(output);
 
         boolean arff = output.getName().endsWith(".arff");
-        
+
         if (arff) {
             svmOutput.write("@RELATION mentiontype\n\n");
             for (int i = 0; i < numFeatures; ++ i) {
@@ -224,7 +224,7 @@ public class PersonOrgClassifier {
             }
             svmOutput.write("@ATTRIBUTE class {Person,Organization,Null}\n\n@DATA\n");
         }
-        
+
         boolean first = true;
         for (CSVRecord record : parser) {
             int label = getLabel(record.get(1));
@@ -245,7 +245,7 @@ public class PersonOrgClassifier {
             } else {
                 svmOutput.write('\n');
             }
-        
+
             if (arff) {
                 svmOutput.write(Joiner.on(',').join(Doubles.asList(features)));
                 svmOutput.write(",");
@@ -382,13 +382,13 @@ public class PersonOrgClassifier {
 
     private int getLabel(String label) {
         switch (label) {
-            case "Person":
-                return 1;
-            case "Organization":
-                return 2;
-            default:
-            case "Null":
-                return 0;
+        case "Person":
+            return 1;
+        case "Organization":
+            return 2;
+        default:
+        case "Null":
+            return 0;
         }
     }
 
@@ -422,16 +422,20 @@ public class PersonOrgClassifier {
     private static TrainConfiguration loadTrainConfig(String[] args) {
         Options options = new Options();
         options.addOption(
-            Option.builder("o").desc("Output file with features")
-                .required().hasArg().argName("file").longOpt("output").build()
+                Option.builder("o").desc("Output file with features")
+                        .required().hasArg().argName("file").longOpt("output").build()
         );
         options.addOption(
-            Option.builder("d").desc("Input training dataset")
-                .required().hasArg().argName("file").longOpt("dataset").build()
+                Option.builder("d").desc("Input training dataset")
+                        .required().hasArg().argName("file").longOpt("dataset").build()
         );
         options.addOption(
-            Option.builder("t").desc("Frequency threshold for names")
-                .hasArg().argName("frequency").longOpt("threshold").build()
+                Option.builder("t").desc("Frequency threshold for names")
+                        .hasArg().argName("frequency").longOpt("threshold").build()
+        );
+        options.addOption(
+                Option.builder().desc("Treat input as a test set (requires files from training phase to be present)")
+                        .longOpt("test").build()
         );
         options.addOption(
             Option.builder().desc("Treat input as a test set (requires files from training phase to be present)")
@@ -466,12 +470,12 @@ public class PersonOrgClassifier {
     private static void printHelp(Options options) {
         HelpFormatter formatter = new HelpFormatter();
         formatter.printHelp(
-            200,
-            "java -Dfile.encoding=UTF-8 "+PersonOrgClassifier.class.getName(),
-            "\n",
-            options,
-            "\n",
-            true
+                200,
+                "java -Dfile.encoding=UTF-8 "+PersonOrgClassifier.class.getName(),
+                "\n",
+                options,
+                "\n",
+                true
         );
     }
 }

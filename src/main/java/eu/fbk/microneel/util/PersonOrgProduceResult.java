@@ -15,6 +15,7 @@ import java.io.*;
  * @author Yaroslav Nechaev (remper@me.com)
  */
 public class PersonOrgProduceResult {
+
     private static final Logger logger = LoggerFactory.getLogger(PersonOrgProduceResult.class);
 
     public void run(TrainConfiguration config) throws IOException {
@@ -43,7 +44,7 @@ public class PersonOrgProduceResult {
             } else {
                 output.write('\n');
             }
-            output.write(username+"\t"+getLabel(rawLabel));
+            output.write(username + "\t" + getLabel(rawLabel));
         }
         parser.close();
         reader.close();
@@ -52,13 +53,13 @@ public class PersonOrgProduceResult {
 
     private String getLabel(String rawLabel) {
         switch (rawLabel.trim()) {
-            default:
-            case "0":
-                return "Null";
-            case "1":
-                return "Person";
-            case "2":
-                return "Organization";
+        default:
+        case "0":
+            return "Null";
+        case "1":
+            return "Person";
+        case "2":
+            return "Organization";
         }
     }
 
@@ -74,6 +75,7 @@ public class PersonOrgProduceResult {
     }
 
     private static class TrainConfiguration {
+
         String input;
         String results;
         String output;
@@ -118,12 +120,12 @@ public class PersonOrgProduceResult {
     private static void printHelp(Options options) {
         HelpFormatter formatter = new HelpFormatter();
         formatter.printHelp(
-            200,
-            "java -Dfile.encoding=UTF-8 "+PersonOrgClassifier.class.getName(),
-            "\n",
-            options,
-            "\n",
-            true
+                200,
+                "java -Dfile.encoding=UTF-8 " + PersonOrgClassifier.class.getName(),
+                "\n",
+                options,
+                "\n",
+                true
         );
     }
 }

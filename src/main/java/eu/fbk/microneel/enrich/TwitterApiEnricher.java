@@ -131,17 +131,29 @@ public final class TwitterApiEnricher implements Annotator {
                             + post.getText() + "\ntwitter: " + status.getText());
                 } else {
                     for (final UserMentionEntity e : status.getUserMentionEntities()) {
-                        final MentionAnnotation m = post.addAnnotation(MentionAnnotation.class,
-                                e.getStart(), e.getEnd());
-                        if (m.getFullName() == null) {
-                            m.setFullName(e.getName());
+                        try {
+                            final MentionAnnotation m = post.addAnnotation(MentionAnnotation.class,
+                                    e.getStart(), e.getEnd());
+                            if (m.getFullName() == null) {
+                                m.setFullName(e.getName());
+                            }
+                        } catch (final Throwable ex) {
+                            LOGGER.warn("Could not add mention annotation", ex);
                         }
                     }
                     for (final HashtagEntity e : status.getHashtagEntities()) {
-                        post.addAnnotation(HashtagAnnotation.class, e.getStart(), e.getEnd());
+                        try {
+                            post.addAnnotation(HashtagAnnotation.class, e.getStart(), e.getEnd());
+                        } catch (final Throwable ex) {
+                            LOGGER.warn("Could not add hashtag annotation", ex);
+                        }
                     }
                     for (final URLEntity e : status.getURLEntities()) {
-                        post.addAnnotation(UrlAnnotation.class, e.getStart(), e.getEnd());
+                        try {
+                            post.addAnnotation(UrlAnnotation.class, e.getStart(), e.getEnd());
+                        } catch (final Throwable ex) {
+                            LOGGER.warn("Could not add URL annotation", ex);
+                        }
                     }
                 }
             }
