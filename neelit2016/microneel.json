@@ -63,10 +63,12 @@
 		"annotators": [ {
 			"type": "eu.fbk.microneel.link.SmtSupervisedLinker",
 			"cross": 5
+		}, {
+			"type": "eu.fbk.microneel.link.SmtSupervisedLinker",
 		} ]
 	},
 	"merger": {
-		"type": "eu.fbk.microneel.merge.ClassificationMerger",
+		"type": "eu.fbk.microneel.merge.TintLinker",
 		"cross": 5,
 		"q": [ "stanford", "ml", "smt" ]
 	}
