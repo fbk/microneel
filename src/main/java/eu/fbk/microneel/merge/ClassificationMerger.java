@@ -1,24 +1,36 @@
 package eu.fbk.microneel.merge;
 
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Iterables;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import eu.fbk.microneel.Annotator;
-import eu.fbk.microneel.Category;
-import eu.fbk.microneel.Post;
-import eu.fbk.utils.core.FrequencyHashSet;
-import eu.fbk.utils.svm.Classifier;
-import eu.fbk.utils.svm.LabelledVector;
-import eu.fbk.utils.svm.Vector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.annotation.Nullable;
+
+import org.apache.commons.lang.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Iterables;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
+import eu.fbk.microneel.Annotator;
+import eu.fbk.microneel.Category;
+import eu.fbk.microneel.Post;
+import eu.fbk.microneel.util.CorpusStats;
+import eu.fbk.utils.core.FrequencyHashSet;
+import eu.fbk.utils.svm.Classifier;
+import eu.fbk.utils.svm.LabelledVector;
+import eu.fbk.utils.svm.Vector;
 
 public class ClassificationMerger implements Annotator {
 
@@ -48,6 +60,9 @@ public class ClassificationMerger implements Annotator {
     private boolean doTrain = false;
     private Integer crossValidation = null;
     private Classifier.Parameters parameters;
+    
+    @Nullable
+    private CorpusStats corpus;
 
     public ClassificationMerger(final JsonObject json, Path configDir) {
         BufferedReader reader;
@@ -112,6 +127,15 @@ public class ClassificationMerger implements Annotator {
             }
             reader.close();
 
+            if (json.has("corpus")) {
+                final String[] relativePaths = json.get("corpus").getAsString().split("\\s+");
+                final Path[] paths = new Path[relativePaths.length];
+                for (int i = 0; i < relativePaths.length; ++i) {
+                    paths[i] = configDir.resolve(relativePaths[i]);
+                }
+                this.corpus = CorpusStats.forFiles(paths);
+            }
+            
 //            for (String key : files.keySet()) {
 //                LOGGER.info("Loading {} file", key.toUpperCase());
 //                Path thisFile = files.get(key);
@@ -378,7 +402,17 @@ public class ClassificationMerger implements Annotator {
                 if (hashtagAllIndexes.contains(beginIndex)) {
                     features.put(beginIndex, "isInHashtag");
                 }
-            }
+                
+                if (corpus != null) {
+                    for (String form : corpus.getCapitalizationsOf(annotation.getSurfaceForm())) {
+                        if (form.toLowerCase().equals(form)) {
+                            features.put(beginIndex, "isKnownCommonWord");
+                        } else if (StringUtils.capitalize(form.toLowerCase()).equals(form)) {
+                            features.put(beginIndex,  "isKnownProperName");
+                        }
+                    }
+                }
+            } 
         }
 
         for (Integer beginIndex : freqs.keySet()) {
