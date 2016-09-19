@@ -69,6 +69,7 @@
 	"merger": {
 		"type": "eu.fbk.microneel.merge.ClassificationMerger",
 		"cross": 5,
+		"corpus": "data/words/words5.tsv.gz data/words/names.tsv.gz data/words/morph.tsv.gz",
 		"q": [ "stanford", "ml", "smt" ]
 	}
 }
