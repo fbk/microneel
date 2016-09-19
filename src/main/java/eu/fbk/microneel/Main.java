@@ -240,6 +240,7 @@ public class Main {
         final StringBuilder body = new StringBuilder();
 
         for (final Post post : Ordering.natural().sortedCopy(posts)) {
+
             body.append("<tr>\n<td>\n");
             body.append("<p class=\"tweet-original\">").append(escaper.escape(post.getText()))
                     .append("</p>\n");
@@ -284,6 +285,7 @@ public class Main {
             for (int i = 0; i < systemCol.size(); ++i) {
                 final EntityAnnotation sa = systemCol.get(i);
                 final EntityAnnotation ga = goldCol.get(i);
+
                 final String su = sa == null || sa.getUri() == null
                         || !sa.getUri().startsWith("http://dbpedia.org/resource/") ? null
                                 : sa.getUri();
@@ -293,6 +295,7 @@ public class Main {
                 final String c = sa == null || ga == null ? "match-none"
                         : Objects.equal(sa.getCategory(), ga.getCategory()) && Objects.equal(su, gu)
                                 ? "match-full" : "match-part";
+
                 body.append("<tr>\n<td class=\"system\">\n");
                 generateReportHelper(body, sa);
                 body.append("</td>\n<td class=\"gold\">\n");
