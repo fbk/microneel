@@ -1,26 +1,5 @@
 package eu.fbk.microneel;
 
-import java.io.IOException;
-import java.io.Reader;
-import java.io.Serializable;
-import java.io.Writer;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map.Entry;
-import java.util.Objects;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import javax.annotation.Nullable;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -28,14 +7,22 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import com.google.common.io.CharStreams;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-
+import com.google.gson.*;
 import eu.fbk.microneel.util.Rewriting;
 import eu.fbk.utils.core.IO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.Serializable;
+import java.io.Writer;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class Post implements Serializable, Cloneable, Comparable<Post> {
 
@@ -175,7 +162,7 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
                 this.annotations.clear();
             } else {
                 // Remove illegal annotations
-                for (final Iterator<Annotation> i = this.annotations.iterator(); i.hasNext();) {
+                for (final Iterator<Annotation> i = this.annotations.iterator(); i.hasNext(); ) {
                     final Annotation annotation = i.next();
                     if (annotation.getEndIndex() > text.length() || !annotation.getText().equals(
                             text.substring(annotation.getBeginIndex(), annotation.getEndIndex()))) {
@@ -351,7 +338,7 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
                 }
                 if (sameClass && sameQualifier
                         || !sameClass && annotationClazz != EntityAnnotation.class
-                                && annotation.getClass() != EntityAnnotation.class) {
+                        && annotation.getClass() != EntityAnnotation.class) {
                     throw new IllegalStateException("Cannot annotate " + beginIndex + ", "
                             + endIndex + " with a " + annotationClazz.getSimpleName()
                             + " as interval overlaps with " + annotation);
@@ -1031,12 +1018,33 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
         private Category category;
 
         private String uri;
+        private Integer beginIndexRewritten = null, endIndexRewritten = null;
+
+        public Integer getBeginIndexRewritten() {
+            return beginIndexRewritten;
+        }
+
+        public void setBeginIndexRewritten(Integer beginIndexRewritten) {
+            this.beginIndexRewritten = beginIndexRewritten;
+        }
+
+        public Integer getEndIndexRewritten() {
+            return endIndexRewritten;
+        }
+
+        public void setEndIndexRewritten(Integer endIndexRewritten) {
+            this.endIndexRewritten = endIndexRewritten;
+        }
 
         EntityAnnotation(final JsonObject json) {
             super(json);
             this.category = json.has("category")
                     ? Category.valueOf(json.get("category").getAsString().toUpperCase().trim())
                     : null;
+            this.beginIndexRewritten = json.has("beginIndexRewritten") ?
+                    json.get("beginIndexRewritten").getAsInt() :
+                    null;
+            this.endIndexRewritten = json.has("endIndexRewritten") ? json.get("endIndexRewritten").getAsInt() : null;
             this.uri = json.has("uri") ? json.get("uri").getAsString() : null;
         }
 
@@ -1075,6 +1083,12 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
             }
             if (this.uri != null) {
                 json.addProperty("uri", this.uri);
+            }
+            if (this.beginIndexRewritten != null) {
+                json.addProperty("beginIndexRewritten", this.beginIndexRewritten);
+            }
+            if (this.endIndexRewritten != null) {
+                json.addProperty("endIndexRewritten", this.endIndexRewritten);
             }
             return json;
         }
