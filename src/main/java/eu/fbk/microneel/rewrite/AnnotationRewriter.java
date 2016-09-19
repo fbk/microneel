@@ -1,6 +1,9 @@
 package eu.fbk.microneel.rewrite;
 
-import org.apache.commons.lang3.text.WordUtils;
+import java.io.IOException;
+import java.nio.file.Path;
+
+import com.google.gson.JsonObject;
 
 import eu.fbk.microneel.Annotator;
 import eu.fbk.microneel.Post;
@@ -8,13 +11,24 @@ import eu.fbk.microneel.Post.Annotation;
 import eu.fbk.microneel.Post.HashtagAnnotation;
 import eu.fbk.microneel.Post.MentionAnnotation;
 import eu.fbk.microneel.Post.UrlAnnotation;
+import eu.fbk.microneel.util.CorpusStats;
 import eu.fbk.microneel.util.Rewriting;
 
 public final class AnnotationRewriter implements Annotator {
 
-    public static final AnnotationRewriter INSTANCE = new AnnotationRewriter();
+    private final CorpusStats corpus;
 
-    private AnnotationRewriter() {
+    public AnnotationRewriter(final JsonObject json, final Path path) throws IOException {
+        final String[] relativePaths = json.get("corpus").getAsString().split("\\s+");
+        final Path[] paths = new Path[relativePaths.length];
+        for (int i = 0; i < relativePaths.length; ++i) {
+            paths[i] = path.resolve(relativePaths[i]);
+        }
+        this.corpus = CorpusStats.forFiles(paths);
+    }
+
+    public AnnotationRewriter(final CorpusStats corpus) {
+        this.corpus = corpus;
     }
 
     @Override
@@ -39,13 +53,17 @@ public final class AnnotationRewriter implements Annotator {
                 rewriting.tryReplace(a.getBeginIndex(), a.getEndIndex(), "");
             } else if (a instanceof MentionAnnotation) {
                 final MentionAnnotation ma = (MentionAnnotation) a;
-                final String replacement = WordUtils.capitalize(
-                        normalize(ma.getFullName() != null ? ma.getFullName() : ma.getUsername()));
+                final String replacement = this.corpus.normalize(ma.getUsername(), true)
+                        + (ma.getFullName() == null ? ""
+                                : " (" + this.corpus.normalize(ma.getFullName(), true) + ")");
+                // final String replacement = this.corpus.normalize(
+                // ma.getFullName() != null ? ma.getFullName() : ma.getUsername(), true);
                 rewriting.tryReplace(ma.getBeginIndex(), ma.getEndIndex(), replacement);
             } else if (a instanceof HashtagAnnotation) {
                 final HashtagAnnotation ha = (HashtagAnnotation) a;
-                final String replacement = normalize(
-                        ha.getTokenization() != null ? ha.getTokenization() : ha.getHashtag());
+                final String replacement = a.getText().equalsIgnoreCase("#rt") ? ""
+                        : this.corpus.normalize(ha.getTokenization() != null ? ha.getTokenization()
+                                : ha.getHashtag(), true);
                 rewriting.tryReplace(ha.getBeginIndex(), ha.getEndIndex(), replacement);
             } else {
                 continue;
@@ -65,27 +83,6 @@ public final class AnnotationRewriter implements Annotator {
                 }
             }
         }
-    }
-
-    private static String normalize(final String string) {
-        final StringBuilder builder = new StringBuilder(string);
-        for (int i = 0; i < builder.length(); ++i) {
-            final char c = builder.charAt(i);
-            if (!Character.isLetterOrDigit(c)) {
-                builder.setCharAt(i, ' ');
-            } else {
-                break;
-            }
-        }
-        for (int i = string.length() - 1; i >= 0; --i) {
-            final char c = builder.charAt(i);
-            if (!Character.isLetterOrDigit(c)) {
-                builder.setCharAt(i, ' ');
-            } else {
-                break;
-            }
-        }
-        return builder.toString().trim().replace('_', ' ');
     }
 
     @Override

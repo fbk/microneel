@@ -1,19 +1,21 @@
 package eu.fbk.microneel.rewrite;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.gson.JsonObject;
 
 import eu.fbk.microneel.Annotator;
 import eu.fbk.microneel.Post;
+import eu.fbk.microneel.util.CorpusStats;
 import eu.fbk.microneel.util.Rewriting;
 
 public class CleaningRewriter implements Annotator {
-
-    public static final CleaningRewriter INSTANCE = new CleaningRewriter();
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CleaningRewriter.class);
 
@@ -36,6 +38,21 @@ public class CleaningRewriter implements Annotator {
             "*\0/*", "//0‑0\\", "v.v", "O_O", "o‑o", "O_o", "o_O", "o_o", "O-O", ">.<", "^5",
             "o/\\o", ">_>^", "^<_<");
 
+    private final CorpusStats corpus;
+
+    public CleaningRewriter(final JsonObject json, final Path path) throws IOException {
+        final String[] relativePaths = json.get("corpus").getAsString().split("\\s+");
+        final Path[] paths = new Path[relativePaths.length];
+        for (int i = 0; i < relativePaths.length; ++i) {
+            paths[i] = path.resolve(relativePaths[i]);
+        }
+        this.corpus = CorpusStats.forFiles(paths);
+    }
+
+    public CleaningRewriter(final CorpusStats corpus) {
+        this.corpus = corpus;
+    }
+
     @Override
     public void annotate(final Post post) throws Throwable {
 
@@ -50,11 +67,14 @@ public class CleaningRewriter implements Annotator {
             post.setRewriting(rewriting);
         }
 
+        // Replace emoticons
+        replaceEmoticons(rewriting);
+
         // Replace a', e', i', o', u' with à, è, ì, ò, ù.
         replaceApostrophes(rewriting);
 
-        // Replace emoticons
-        replaceEmoticons(rewriting);
+        // Fix capitalization
+        replaceCapitalization(rewriting);
 
         // Replace escaped quotes and some html entities
         rewriting.tryReplace("\\\"", "\"", false);
@@ -116,6 +136,28 @@ public class CleaningRewriter implements Annotator {
                     rewriting.tryReplace(index - 1, index + 1, "ò");
                 } else if (ch == 'u') {
                     rewriting.tryReplace(index - 1, index + 1, "ù");
+                }
+            }
+        }
+    }
+
+    private void replaceCapitalization(final Rewriting rewriting) {
+        final String text = rewriting.getOriginalString();
+        int start = -1;
+        for (int i = 0; i <= text.length(); ++i) {
+            if (i < text.length() && Character.isLetterOrDigit(text.charAt(i))) {
+                if (start < 0) {
+                    start = i;
+                }
+            } else {
+                if (start >= 0) {
+                    final String token = text.substring(start, i);
+                    final String normalizedToken = this.corpus.normalize(token, false);
+                    if (!normalizedToken.equals(token)) {
+                        rewriting.tryReplace(start, i, normalizedToken);
+                        LOGGER.debug("Normalized {} -> {}", token, normalizedToken);
+                    }
+                    start = -1;
                 }
             }
         }
