@@ -55,7 +55,7 @@ public final class AnnotationRewriter implements Annotator {
                 final MentionAnnotation ma = (MentionAnnotation) a;
                 final String replacement = this.corpus.normalize(ma.getUsername(), true)
                         + (ma.getFullName() == null ? ""
-                                : " (" + this.corpus.normalize(ma.getFullName(), true) + ")");
+                                : " / " + this.corpus.normalize(ma.getFullName(), true));
                 // final String replacement = this.corpus.normalize(
                 // ma.getFullName() != null ? ma.getFullName() : ma.getUsername(), true);
                 rewriting.tryReplace(ma.getBeginIndex(), ma.getEndIndex(), replacement);
