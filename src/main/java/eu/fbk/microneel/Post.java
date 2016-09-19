@@ -37,7 +37,7 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
             "(^|[^0-9_\\p{IsAlphabetic}])#([0-9]*[A-Za-z][0-9_\\p{IsAlphabetic}]+)($|[^0-9_\\p{IsAlphabetic}])");
 
     private static final Pattern URL_PATTERN = Pattern
-            .compile("(^|[^A-Za-z0-9_])(http|https)://t.co/([A-Za-z0-9_]{8})");
+            .compile("(^|[^A-Za-z0-9_])(http|https)://t.co/([A-Za-z0-9_]+)($|[^A-Za-z0-9_])");
 
     private static final long serialVersionUID = 1L;
 
@@ -162,7 +162,7 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
                 this.annotations.clear();
             } else {
                 // Remove illegal annotations
-                for (final Iterator<Annotation> i = this.annotations.iterator(); i.hasNext(); ) {
+                for (final Iterator<Annotation> i = this.annotations.iterator(); i.hasNext();) {
                     final Annotation annotation = i.next();
                     if (annotation.getEndIndex() > text.length() || !annotation.getText().equals(
                             text.substring(annotation.getBeginIndex(), annotation.getEndIndex()))) {
@@ -338,7 +338,7 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
                 }
                 if (sameClass && sameQualifier
                         || !sameClass && annotationClazz != EntityAnnotation.class
-                        && annotation.getClass() != EntityAnnotation.class) {
+                                && annotation.getClass() != EntityAnnotation.class) {
                     throw new IllegalStateException("Cannot annotate " + beginIndex + ", "
                             + endIndex + " with a " + annotationClazz.getSimpleName()
                             + " as interval overlaps with " + annotation);
@@ -1041,10 +1041,10 @@ public final class Post implements Serializable, Cloneable, Comparable<Post> {
             this.category = json.has("category")
                     ? Category.valueOf(json.get("category").getAsString().toUpperCase().trim())
                     : null;
-            this.beginIndexRewritten = json.has("beginIndexRewritten") ?
-                    json.get("beginIndexRewritten").getAsInt() :
-                    null;
-            this.endIndexRewritten = json.has("endIndexRewritten") ? json.get("endIndexRewritten").getAsInt() : null;
+            this.beginIndexRewritten = json.has("beginIndexRewritten")
+                    ? json.get("beginIndexRewritten").getAsInt() : null;
+            this.endIndexRewritten = json.has("endIndexRewritten")
+                    ? json.get("endIndexRewritten").getAsInt() : null;
             this.uri = json.has("uri") ? json.get("uri").getAsString() : null;
         }
 

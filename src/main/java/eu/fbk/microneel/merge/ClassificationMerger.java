@@ -320,6 +320,11 @@ public class ClassificationMerger implements Annotator {
                 Category category = annotation.getCategory();
                 int beginIndex = annotation.getBeginIndex();
 
+                if (annotation.getBeginIndex() == annotation.getEndIndex()) {
+                    System.out.println(annotation);
+                    continue;
+                }
+                
 //                Integer beginIndexRewritten = annotation.getBeginIndexRewritten();
 //                Integer endIndexRewritten = annotation.getEndIndexRewritten();
 //

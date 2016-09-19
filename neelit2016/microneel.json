@@ -49,11 +49,13 @@
 	"rewriter": {
 		"type": "sequence",
 		"annotators": [ {
-			"type": "eu.fbk.microneel.rewrite.AnnotationRewriter"
+			"type": "eu.fbk.microneel.rewrite.AnnotationRewriter",
+			"corpus": "data/words/words5.tsv.gz data/words/names.tsv.gz data/words/morph.tsv.gz"
 		}, {
 			"type": "eu.fbk.microneel.rewrite.SlangRewriter"
 		}, {
-			"type": "eu.fbk.microneel.rewrite.CleaningRewriter"
+			"type": "eu.fbk.microneel.rewrite.CleaningRewriter",
+			"corpus": "data/words/words5.tsv.gz data/words/names.tsv.gz data/words/morph.tsv.gz"
 		} ]
 	},
 	"linker": {
@@ -67,6 +69,6 @@
 	"merger": {
 		"type": "eu.fbk.microneel.merge.ClassificationMerger",
 		"cross": 5,
-		"q": [ "ml", "stanford", "smt" ]
+		"q": [ "stanford", "ml", "smt" ]
 	}
 }
