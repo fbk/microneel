@@ -230,6 +230,9 @@ public class TintLinker implements Annotator {
         List<LinkingTag> linkingTags = new ArrayList<>();
         try {
             linkingTags = machineLinking.tag(mlText);
+//            if (!mlText.equals(text)) {
+//                linkingTags.addAll(machineLinking.tag(text));
+//            }
         } catch (Exception e) {
             // continue
         }
@@ -249,6 +252,8 @@ public class TintLinker implements Annotator {
                 originalEnd = rewriting.toOriginalOffset(end);
                 Post.EntityAnnotation entityAnnotation = post
                         .addAnnotation(Post.EntityAnnotation.class, originalBegin, originalEnd, "stanford");
+                entityAnnotation.setBeginIndexRewritten(begin);
+                entityAnnotation.setEndIndexRewritten(end);
                 switch (ner) {
                 case "PER":
                     entityAnnotation.setCategory(Category.PERSON);
@@ -330,6 +335,8 @@ public class TintLinker implements Annotator {
             try {
                 Post.EntityAnnotation entityAnnotation = post
                         .addAnnotation(Post.EntityAnnotation.class, originalBegin, originalEnd, "ml");
+                entityAnnotation.setBeginIndexRewritten(begin);
+                entityAnnotation.setEndIndexRewritten(end);
                 entityAnnotation.setCategory(type);
                 entityAnnotation.setUri(dbpediaEntity);
             } catch (Exception e) {
