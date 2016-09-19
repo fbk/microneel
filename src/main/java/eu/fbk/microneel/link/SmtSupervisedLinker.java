@@ -54,7 +54,6 @@ public class SmtSupervisedLinker implements Annotator {
         }
         if (json.has("cross")) {
             crossValidation = json.get("cross").getAsInt();
-            LOGGER.info("Cross-validation, size {}", crossValidation);
         }
         modelFile = configDir.resolve(modelFilePattern);
         int freqThreshold = DEFAULT_THRESHOLD;
@@ -133,6 +132,8 @@ public class SmtSupervisedLinker implements Annotator {
         Post[] postArray = Iterables.toArray(posts, Post.class);
 
         if (crossValidation != null) {
+            LOGGER.info("Cross-validation, size {}", crossValidation);
+
             int split = crossValidation;
             int size = postArray.length;
             int step = size / split;
@@ -162,8 +163,10 @@ public class SmtSupervisedLinker implements Annotator {
             Classifier classifier;
             if (doTrain) {
                 classifier = trainClassifier(Arrays.asList(postArray));
+                LOGGER.info("Saving model: " + modelFile.toAbsolutePath());
                 classifier.writeTo(modelFile);
             } else {
+                LOGGER.info("Reading model: " + modelFile.toAbsolutePath());
                 classifier = Classifier.readFrom(modelFile);
                 for (Post post : postArray) {
                     annotatePost(classifier, post);
@@ -238,7 +241,7 @@ public class SmtSupervisedLinker implements Annotator {
                 try {
                     final Post.EntityAnnotation a = post.addAnnotation(Post.EntityAnnotation.class,
                             ma.getBeginIndex() + 1, ma.getEndIndex(), "smt");
-                    a.setCategory(ma.getCategory());
+                    a.setCategory(category);
                     a.setUri(ma.getUri());
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -272,109 +275,6 @@ public class SmtSupervisedLinker implements Annotator {
         }
         return features;
     }
-
-//    private HashMultimap<Integer, String> extractFeatures(Post post) {
-//        HashMultimap<Integer, String> features = HashMultimap.create();
-//
-//        // Mentions
-//        Set<Integer> mentionBeginIndexes = new HashSet<>();
-//        Set<Integer> mentionAllIndexes = new HashSet<>();
-//        List<Post.MentionAnnotation> mentionAnnotations = post.getAnnotations(Post.MentionAnnotation.class);
-//        for (Post.MentionAnnotation mentionAnnotation : mentionAnnotations) {
-//            mentionBeginIndexes.add(mentionAnnotation.getBeginIndex() + 1);
-//            for (int i = mentionAnnotation.getBeginIndex() + 1; i < mentionAnnotation.getEndIndex(); i++) {
-//                mentionAllIndexes.add(i);
-//            }
-//        }
-//
-//        // Hashtags
-//        Set<Integer> hashtagBeginIndexes = new HashSet<>();
-//        Set<Integer> hashtagAllIndexes = new HashSet<>();
-//        List<Post.HashtagAnnotation> hashtagAnnotations = post.getAnnotations(Post.HashtagAnnotation.class);
-//        for (Post.HashtagAnnotation hashtagAnnotation : hashtagAnnotations) {
-//            hashtagBeginIndexes.add(hashtagAnnotation.getBeginIndex() + 1);
-//            for (int i = hashtagAnnotation.getBeginIndex() + 1; i < hashtagAnnotation.getEndIndex(); i++) {
-//                hashtagAllIndexes.add(i);
-//            }
-//        }
-//
-//        Map<Integer, FrequencyHashSet<Category>> freqs = new HashMap<>();
-//
-//        for (String qualifier : qualifiers) {
-//            List<Post.EntityAnnotation> annotations = post
-//                    .getAnnotations(Post.EntityAnnotation.class, qualifier);
-//            for (Post.EntityAnnotation annotation : annotations) {
-//                Category category = annotation.getCategory();
-//                int beginIndex = annotation.getBeginIndex();
-//
-////                Integer beginIndexRewritten = annotation.getBeginIndexRewritten();
-////                Integer endIndexRewritten = annotation.getEndIndexRewritten();
-////
-////                if (beginIndexRewritten != null && endIndexRewritten != null) {
-////                    String text = null;
-////                    try {
-////                        text = post.getRewriting().getRewrittenString()
-////                                .substring(beginIndexRewritten, endIndexRewritten);
-////                        if (post.getId().equals("twitter:288387899223855105")) {
-////                            System.out.println(text);
-////                        }
-////
-////                        Annotation tintAnnotation = pipeline.runRaw(text);
-////                        for (CoreLabel token : tintAnnotation.get(CoreAnnotations.TokensAnnotation.class)) {
-////                            String tokenText = token.originalText();
-////                            for (String key : tokens.keySet()) {
-////                                if (tokens.get(key).get(tokenText) != null) {
-////                                    features.put(beginIndex, "contains_NER_" + key.toUpperCase());
-////                                }
-////                            }
-////                        }
-////                    } catch (Exception e) {
-////                        // ignore
-////                    }
-////                }
-//
-//                String uri = annotation.getUri();
-//                if (uri != null && uri.length() > 0) {
-//                    features.put(beginIndex, "isLinked");
-//                }
-//
-//                features.put(beginIndex, category + "_" + qualifier);
-//                freqs.putIfAbsent(beginIndex, new FrequencyHashSet<>());
-//                freqs.get(beginIndex).add(category);
-//
-//                features.put(beginIndex, qualifier + "_annotated");
-//
-//                if (Character.isUpperCase(annotation.getSurfaceForm().charAt(0))) {
-//                    features.put(beginIndex, "uppercase");
-//                }
-//
-//                if (mentionBeginIndexes.contains(beginIndex)) {
-//                    features.put(beginIndex, "isMention");
-//                }
-//                if (mentionAllIndexes.contains(beginIndex)) {
-//                    features.put(beginIndex, "isInMention");
-//                }
-//                if (hashtagBeginIndexes.contains(beginIndex)) {
-//                    features.put(beginIndex, "isHashtag");
-//                }
-//                if (hashtagAllIndexes.contains(beginIndex)) {
-//                    features.put(beginIndex, "isInHashtag");
-//                }
-//            }
-//        }
-//
-//        for (Integer beginIndex : freqs.keySet()) {
-//            FrequencyHashSet<Category> typeFreq = freqs.get(beginIndex);
-//            for (Category category : typeFreq.keySet()) {
-//                int freq = typeFreq.get(category);
-//                for (int i = 0; i < freq; i++) {
-//                    features.put(beginIndex, category + "_freq_" + (i + 1));
-//                }
-//            }
-//        }
-//
-//        return features;
-//    }
 
     private Set<String> extractFeatures(final Post.MentionAnnotation annotation) {
 
