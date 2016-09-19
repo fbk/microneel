@@ -61,9 +61,8 @@
 	"linker": {
 		"type": "sequence",
 		"annotators": [ {
-			"type": "eu.fbk.microneel.link.SmtLinker"
-		}, {
-			"type": "eu.fbk.microneel.link.TintLinker"
+			"type": "eu.fbk.microneel.link.SmtSupervisedLinker",
+			"cross": 5
 		} ]
 	},
 	"merger": {
