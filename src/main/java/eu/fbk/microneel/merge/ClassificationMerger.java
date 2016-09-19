@@ -4,7 +4,6 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Iterables;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import eu.fbk.dh.tint.runner.TintPipeline;
 import eu.fbk.microneel.Annotator;
 import eu.fbk.microneel.Category;
 import eu.fbk.microneel.Post;
@@ -16,15 +15,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
-import java.io.FileInputStream;
 import java.io.FileReader;
-import java.io.InputStream;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 
 public class ClassificationMerger implements Annotator {
 
-    private static int split = 5;
+    //    private static int split = 5;
     private static final Logger LOGGER = LoggerFactory.getLogger(ClassificationMerger.class);
 
     private static Map<Category, Integer> outcome = new HashMap<>();
@@ -45,9 +43,26 @@ public class ClassificationMerger implements Annotator {
     private final String[] qualifiers;
     Map<String, Map<Integer, String>> gold = new HashMap<>();
 
+    private static String modelFilePattern = "classification.model";
+    private Path modelFile;
+    private boolean doTrain = false;
+    private Integer crossValidation = null;
+    private Classifier.Parameters parameters;
+
     public ClassificationMerger(final JsonObject json, Path configDir) {
         BufferedReader reader;
         String line;
+
+        parameters = Classifier.Parameters
+                .forSVMPolyKernel(outcome.size() + 1, null, null, null, null, null);
+
+        if (json.has("train")) {
+            doTrain = json.get("train").getAsBoolean();
+        }
+        if (json.has("cross")) {
+            crossValidation = json.get("cross").getAsInt();
+        }
+        modelFile = configDir.resolve(modelFilePattern);
 
         if (!json.has("q")) {
             this.qualifiers = new String[] {};
@@ -133,36 +148,54 @@ public class ClassificationMerger implements Annotator {
 
     @Override public void annotate(Iterable<Post> posts) throws Throwable {
         Post[] postArray = Iterables.toArray(posts, Post.class);
-        int size = postArray.length;
-        int step = size / split;
 
-        for (int i = 0; i < split; i++) {
-            int start = step * i;
-            int end = start + step;
-            if (i == split - 1) {
-                end = size;
+        if (crossValidation != null) {
+            int split = crossValidation;
+            int size = postArray.length;
+            int step = size / split;
+
+            for (int i = 0; i < split; i++) {
+                int start = step * i;
+                int end = start + step;
+                if (i == split - 1) {
+                    end = size;
+                }
+
+                List<Post> trainingPosts = new ArrayList<>();
+                List<Post> testPosts = new ArrayList<>();
+
+                for (int j = 0; j < size; j++) {
+                    Post thisPost = postArray[j];
+                    if (j >= start && j < end) {
+                        testPosts.add(thisPost);
+                    } else {
+                        trainingPosts.add(thisPost);
+                    }
+                }
+
+                merge(testPosts, trainingPosts, i, split);
             }
-
-            List<Post> trainingPosts = new ArrayList<>();
-            List<Post> testPosts = new ArrayList<>();
-
-            for (int j = 0; j < size; j++) {
-                Post thisPost = postArray[j];
-                if (j >= start && j < end) {
-                    testPosts.add(thisPost);
-                } else {
-                    trainingPosts.add(thisPost);
+        } else {
+            Classifier classifier;
+            if (doTrain) {
+                classifier = trainClassifier(Arrays.asList(postArray));
+                classifier.writeTo(modelFile);
+            } else {
+                classifier = Classifier.readFrom(modelFile);
+                for (Post post : postArray) {
+                    annotatePost(classifier, post);
                 }
             }
-
-            merge(testPosts, trainingPosts, i, split);
         }
     }
 
-    private void merge(List<Post> testPosts, List<Post> trainingPosts, int i, int split) {
+    private Classifier trainClassifier(List<Post> posts) throws IOException {
+        return trainClassifier(posts, null);
+    }
 
+    private Classifier trainClassifier(List<Post> posts, String logMessage) throws IOException {
         List<LabelledVector> trainingSet = new ArrayList<>();
-        for (Post trainingPost : trainingPosts) {
+        for (Post trainingPost : posts) {
             HashMultimap<Integer, String> features = extractFeatures(trainingPost);
             String id = trainingPost.getId();
 
@@ -182,67 +215,74 @@ public class ClassificationMerger implements Annotator {
             }
         }
 
+        if (logMessage != null) {
+            LOGGER.info(logMessage);
+        }
+        return Classifier.train(parameters, trainingSet);
+
+    }
+
+    private void annotatePost(Classifier classifier, Post post) {
+        HashMultimap<Integer, String> features = extractFeatures(post);
+        for (Integer offset : features.keySet()) {
+            final eu.fbk.utils.svm.Vector.Builder builder = eu.fbk.utils.svm.Vector.builder();
+            builder.set(features.get(offset));
+
+            // Predict end (rule-based)
+            int end = -1;
+            FrequencyHashSet<String> urls = new FrequencyHashSet<>();
+            for (String qualifier : qualifiers) {
+                Post.EntityAnnotation annotation = post
+                        .getAnnotation(offset, Post.EntityAnnotation.class, qualifier);
+                if (annotation != null) {
+                    if (end == -1) {
+                        end = annotation.getEndIndex();
+                    } else {
+                        end = Math.min(end, annotation.getEndIndex());
+                    }
+                    String uri = annotation.getUri();
+                    if (uri != null) {
+                        urls.add(uri);
+                    }
+                }
+            }
+
+            // Predict type (SVM)
+            eu.fbk.utils.svm.Vector vector = builder.build();
+            LabelledVector predict = classifier.predict(false, vector);
+
+            // Predict label (rule-based)
+            try {
+                if (predict.getLabel() != 0) {
+                    final Post.EntityAnnotation ta = post
+                            .addAnnotation(Post.EntityAnnotation.class, offset, end);
+                    ta.setCategory(classificationCategories.get(predict.getLabel()));
+                    if (urls.size() > 0) {
+                        String candidate = urls.mostFrequent();
+                        if (urls.get(candidate) > 0) {
+                            ta.setUri(candidate);
+                        }
+                    }
+                }
+            } catch (final Throwable ex) {
+                // Ignore
+            }
+        }
+
+    }
+
+    private void merge(List<Post> testPosts, List<Post> trainingPosts, int i, int split) {
+
         Classifier classifier = null;
 
         try {
-            LOGGER.info("Perform training ({}/{})", i + 1, split);
-            Classifier.Parameters parameters = Classifier.Parameters
-                    .forSVMPolyKernel(outcome.size() + 1, null, null, null, null, null);
-            classifier = Classifier.train(parameters, trainingSet);
+            classifier = trainClassifier(trainingPosts, String.format("Perform training (%d/%d)", i + 1, split));
         } catch (Exception e) {
             e.printStackTrace();
-            return;
         }
 
         for (Post testPost : testPosts) {
-            HashMultimap<Integer, String> features = extractFeatures(testPost);
-            for (Integer offset : features.keySet()) {
-                final eu.fbk.utils.svm.Vector.Builder builder = eu.fbk.utils.svm.Vector.builder();
-                builder.set(features.get(offset));
-
-                // Predict end (rule-based)
-                int end = -1;
-                FrequencyHashSet<String> urls = new FrequencyHashSet<>();
-                for (String qualifier : qualifiers) {
-                    Post.EntityAnnotation annotation = testPost
-                            .getAnnotation(offset, Post.EntityAnnotation.class, qualifier);
-                    if (annotation != null) {
-                        if (end == -1) {
-                            end = annotation.getEndIndex();
-                        } else {
-                            end = Math.min(end, annotation.getEndIndex());
-                        }
-                        String uri = annotation.getUri();
-                        if (uri != null) {
-                            urls.add(uri);
-                        }
-                    }
-                }
-
-                // Predict type (SVM)
-                eu.fbk.utils.svm.Vector vector = builder.build();
-                LabelledVector predict = classifier.predict(false, vector);
-                if (testPost.getId().equals("twitter:288387899223855105")) {
-                    System.out.println(predict);
-                }
-
-                // Predict label (rule-based)
-                try {
-                    if (predict.getLabel() != 0) {
-                        final Post.EntityAnnotation ta = testPost
-                                .addAnnotation(Post.EntityAnnotation.class, offset, end);
-                        ta.setCategory(classificationCategories.get(predict.getLabel()));
-                        if (urls.size() > 0) {
-                            String candidate = urls.mostFrequent();
-                            if (urls.get(candidate) > 0) {
-                                ta.setUri(candidate);
-                            }
-                        }
-                    }
-                } catch (final Throwable ex) {
-                    // Ignore
-                }
-            }
+            annotatePost(classifier, testPost);
         }
     }
 
