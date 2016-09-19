@@ -126,16 +126,13 @@ public class CleaningRewriter implements Annotator {
             } else if (!maybeQuote && afterLetter && !beforeLetter
                     && !APOSTROPHE_WORDS.contains(word)) {
                 final char ch = text.charAt(index - 1);
-                if (ch == 'a') {
-                    rewriting.tryReplace(index - 1, index + 1, "à");
-                } else if (ch == 'e') {
-                    rewriting.tryReplace(index - 1, index + 1, "è");
-                } else if (ch == 'i') {
-                    rewriting.tryReplace(index - 1, index + 1, "ì");
-                } else if (ch == 'o') {
-                    rewriting.tryReplace(index - 1, index + 1, "ò");
-                } else if (ch == 'u') {
-                    rewriting.tryReplace(index - 1, index + 1, "ù");
+                final char ch2 = ch == 'a' ? 'à'
+                        : ch == 'e' ? 'è' : ch == 'i' ? 'ì' : ch == 'o' ? 'ò' : ch == 'u' ? 'ù' : 0;
+                if (ch2 != 0) {
+                    if (!rewriting.tryReplace(start, index + 1,
+                            rewriting.getOriginalString().substring(start, index - 1) + ch2)) {
+                        rewriting.tryReplace(index - 1, index + 1, "" + ch2);
+                    }
                 }
             }
         }

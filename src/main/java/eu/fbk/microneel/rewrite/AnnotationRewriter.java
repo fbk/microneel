@@ -53,17 +53,26 @@ public final class AnnotationRewriter implements Annotator {
                 rewriting.tryReplace(a.getBeginIndex(), a.getEndIndex(), "");
             } else if (a instanceof MentionAnnotation) {
                 final MentionAnnotation ma = (MentionAnnotation) a;
-                final String replacement = this.corpus.normalize(ma.getUsername(), true)
-                        + (ma.getFullName() == null ? ""
-                                : " / " + this.corpus.normalize(ma.getFullName(), true));
+                final String normUsername = this.corpus.normalize(ma.getUsername(), true);
+                final String normFullName = ma.getFullName() == null ? null
+                        : this.corpus.normalize(ma.getFullName(), true);
+                final String replacement = normFullName == null ? normUsername
+                        : normUsername.length() > normFullName.length() ? normUsername
+                                : normFullName;
+                // final String replacement = this.corpus.normalize(ma.getUsername(), true)
+                // + (ma.getFullName() == null ? ""
+                // : " / " + this.corpus.normalize(ma.getFullName(), true));
                 // final String replacement = this.corpus.normalize(
                 // ma.getFullName() != null ? ma.getFullName() : ma.getUsername(), true);
                 rewriting.tryReplace(ma.getBeginIndex(), ma.getEndIndex(), replacement);
             } else if (a instanceof HashtagAnnotation) {
                 final HashtagAnnotation ha = (HashtagAnnotation) a;
-                final String replacement = a.getText().equalsIgnoreCase("#rt") ? ""
-                        : this.corpus.normalize(ha.getTokenization() != null ? ha.getTokenization()
-                                : ha.getHashtag(), true);
+                final String replacement = a.getText()
+                        .equalsIgnoreCase("#rt")
+                                ? ""
+                                : this.corpus.normalize(ha.getTokenization() != null
+                                        ? ha.getTokenization().replace(" ", "") : ha.getHashtag(),
+                                        true);
                 rewriting.tryReplace(ha.getBeginIndex(), ha.getEndIndex(), replacement);
             } else {
                 continue;
