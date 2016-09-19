@@ -66,6 +66,7 @@
 	},
 	"merger": {
 		"type": "eu.fbk.microneel.merge.ClassificationMerger",
+		"cross": 5,
 		"q": [ "ml", "stanford", "smt" ]
 	}
 }
