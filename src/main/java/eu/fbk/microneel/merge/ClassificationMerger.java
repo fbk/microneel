@@ -419,6 +419,10 @@ public class ClassificationMerger implements Annotator {
                         }
                     }
                 }
+                
+                if (annotation.getSurfaceForm().split("\\s+").length > 1) {
+                    features.put(beginIndex, "isMultiWord");
+                }
             } 
         }
 
